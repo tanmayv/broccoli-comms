@@ -41,7 +41,7 @@ The Electron app intentionally does **not** fall back to `~/.cache/agent-tracker
 ## Install and run
 
 ```sh
-cd /home/tanmay/projects/nix/broccoli-comms-electron-integration-worktree/agent-communicator-electron
+cd /path/to/broccoli-comms/agent-communicator-electron
 npm install
 npm run dev
 ```

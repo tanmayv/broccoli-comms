@@ -1,5 +1,7 @@
 # VM Workflows for `agent-registry`
 
+> **Note**: This is a registry dev/ops operational document.
+
 Use two VM modes:
 
 - **Stateful dev VM** for fast iteration and manual debugging
@@ -10,7 +12,7 @@ Use two VM modes:
 The flake exports a reusable development VM:
 
 ```bash
-nix run path:/path/to/home-manager-core/agent-registry#devvm
+nix run path:/path/to/broccoli-comms/agent-registry#devvm
 ```
 
 This launches the `devvm` NixOS configuration from the flake.

@@ -1,5 +1,7 @@
 # Agent Registry Deployment Guide
 
+> **Note**: This is a registry dev/ops operational document.
+
 This guide shows how to run `agent-registry` as a standalone service, how to configure shared-secret auth, and how to intentionally disable auth for local/dev setups.
 
 ## What this slice ships
@@ -26,7 +28,7 @@ In your `flake.nix`:
 
 ```nix
 {
-  inputs.agent-registry.url = "path:/path/to/home-manager-core/agent-registry";
+  inputs.agent-registry.url = "path:/path/to/broccoli-comms/agent-registry";
 
   outputs = { self, nixpkgs, agent-registry, ... }: {
     nixosConfigurations.my-host = nixpkgs.lib.nixosSystem {
@@ -69,7 +71,7 @@ For Linux machines that are not running NixOS but do use Nix + Home Manager, imp
 
 ```nix
 {
-  inputs.agent-registry.url = "path:/path/to/home-manager-core/agent-registry";
+  inputs.agent-registry.url = "path:/path/to/broccoli-comms/agent-registry";
 
   outputs = { self, nixpkgs, home-manager, agent-registry, ... }: {
     homeConfigurations.user = home-manager.lib.homeManagerConfiguration {
@@ -110,7 +112,7 @@ Managed agents are also supported in the Home Manager module; they run as the Ho
 For quick manual runs:
 
 ```bash
-nix run path:/path/to/home-manager-core/agent-registry
+nix run path:/path/to/broccoli-comms/agent-registry
 ```
 
 Optional environment:
@@ -122,7 +124,7 @@ export TRACKER_GONE_SECONDS=180
 export AGENT_REGISTRY_AUTH=true
 export AGENT_REGISTRY_TOKEN="your-shared-token"
 export AGENT_REGISTRY_STATE_PATH="$HOME/.local/state/agent-registry/state.json"
-nix run path:/path/to/home-manager-core/agent-registry
+nix run path:/path/to/broccoli-comms/agent-registry
 ```
 
 ## 4. Secret setup when auth is enabled
