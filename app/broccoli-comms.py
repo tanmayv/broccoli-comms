@@ -3117,25 +3117,6 @@ def _bootstrap_agents_md(base: str, path: Path, by_type: dict[str, list[dict]], 
     summarize = get_toml_config("agents_md", "summarize_memories", True)
     full_expertise = get_toml_config("agents_md", "full_expertise", True)
 
-    habits = by_type.get("habit") or []
-    if habits:
-        lines.extend(["", "## Embedded retained habits from durable memory", "These retained habits are mandatory operating instructions. Follow them across turns and before completion, validation, review handoff, or queue-continuation transitions."])
-        if summarize:
-            for mem in habits:
-                lines.append(f"- **[Habit] {mem.get('title') or mem.get('memory_id')}** (ID: `{mem.get('memory_id')}`) - To view in full, run: `broccoli-comms memory show {mem.get('memory_id')}`")
-        else:
-            for mem in habits:
-                lines.extend([
-                    "",
-                    f"### {mem.get('title') or mem.get('memory_id')}",
-                    f"- id: `{mem.get('memory_id')}`",
-                    f"- type: `{mem.get('type')}`",
-                    f"- scope: `{mem.get('scope')}`",
-                ])
-                if mem.get("source_task_id"):
-                    lines.append(f"- source_task: `{mem.get('source_task_id')}`")
-                lines.extend(["", str(mem.get("body") or "").strip()])
-
     facts = (by_type.get("fact") or []) + (by_type.get("episode") or [])
     if facts:
         lines.extend(["", "## Embedded facts and episodes from durable memory"])
@@ -3173,6 +3154,21 @@ def _bootstrap_agents_md(base: str, path: Path, by_type: dict[str, list[dict]], 
         else:
             for mem in expertises:
                 lines.append(f"- **[Expertise] {mem.get('title') or mem.get('memory_id')}** (ID: `{mem.get('memory_id')}`) - To view in full, run: `broccoli-comms memory show {mem.get('memory_id')}`")
+
+    habits = by_type.get("habit") or []
+    if habits:
+        lines.extend(["", "## Embedded retained habits from durable memory", "These retained habits are mandatory operating instructions. Follow them across turns and before completion, validation, review handoff, or queue-continuation transitions."])
+        for mem in habits:
+            lines.extend([
+                "",
+                f"### {mem.get('title') or mem.get('memory_id')}",
+                f"- id: `{mem.get('memory_id')}`",
+                f"- type: `{mem.get('type')}`",
+                f"- scope: `{mem.get('scope')}`",
+            ])
+            if mem.get("source_task_id"):
+                lines.append(f"- source_task: `{mem.get('source_task_id')}`")
+            lines.extend(["", str(mem.get("body") or "").strip()])
 
     skills = by_type.get("skill") or []
     if skills:

@@ -1037,8 +1037,8 @@ agent_communicator_tui = "/config/agent-communicator"
             self.assertIn("Completed previous chain.", memory)
             self.assertIn("Embedded retained habits from durable memory", agents)
             self.assertIn("Review", agents)
-            self.assertNotIn("Run tests", agents)
-            self.assertIn("broccoli-comms memory show mem-habit", agents)
+            self.assertIn("Run tests", agents)
+            self.assertNotIn("broccoli-comms memory show mem-habit", agents)
             self.assertIn("before completion, validation, review handoff", agents)
             self.assertNotIn("source: `" + str(context / "habits.md") + "`", agents)
             self.assertNotIn("secret detailed steps", agents)
@@ -1115,13 +1115,24 @@ full_expertise = false
                 }
                 agents = broccoli_comms_app._bootstrap_agents_md(base, Path(tmp), by_type)
                 
-                self.assertIn("- **[Habit] Always review** (ID: `mem-h`) - To view in full, run: `broccoli-comms memory show mem-h`", agents)
+                # Habits are always rendered in full
+                self.assertNotIn("- **[Habit] Always review**", agents)
+                self.assertIn("### Always review", agents)
+                self.assertIn("details", agents)
+
+                # Facts are summarized
                 self.assertIn("- **[Fact] Database Name** (ID: `mem-f`) - To view in full, run: `broccoli-comms memory show mem-f`", agents)
-                self.assertIn("- **[Expertise] System Design** (ID: `mem-e`) - To view in full, run: `broccoli-comms memory show mem-e`", agents)
-                
-                self.assertNotIn("details", agents)
                 self.assertNotIn("db_v1", agents)
+
+                # Expertise is summarized
+                self.assertIn("- **[Expertise] System Design** (ID: `mem-e`) - To view in full, run: `broccoli-comms memory show mem-e`", agents)
                 self.assertNotIn("architecture", agents)
+
+                # Check ordering: Facts -> Expertise -> Habits
+                idx_fact = agents.index("Embedded facts and episodes")
+                idx_expert = agents.index("Embedded expertise")
+                idx_habit = agents.index("Embedded retained habits")
+                self.assertTrue(idx_fact < idx_expert < idx_habit)
 
     def test_bootstrap_agents_md_respects_full_rendering_and_full_expertise(self):
         with tempfile.TemporaryDirectory() as tmp:
