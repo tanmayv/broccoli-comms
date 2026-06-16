@@ -986,7 +986,8 @@ class TestLearningKernelCli(unittest.TestCase):
             other_global = k.memory_propose(type="fact", scope="global", subject_agent="a", title="Other global", body="only a", source_task_id=task["task_id"], proposed_by="a")
             other_project = k.memory_propose(type="fact", scope="project:x", subject_agent="a", title="Other project", body="project only a", source_task_id=task["task_id"], proposed_by="a")
             own_project = k.memory_propose(type="fact", scope="project:x", subject_agent="b", title="Own project", body="project b", source_task_id=task["task_id"], proposed_by="a")
-            for mem in (shared, other_global, other_project, own_project):
+            wrong_project = k.memory_propose(type="fact", scope="project:y", subject_agent="b", title="Wrong project", body="project y b", source_task_id=task["task_id"], proposed_by="a")
+            for mem in (shared, other_global, other_project, own_project, wrong_project):
                 k.memory_approve(mem["memory"]["memory_id"], expected_version=mem["memory"]["version"])
             boot = k.memory_for_bootstrap(agent="b", scope="project:x")
             titles = {record["title"] for record in boot["records"]}
@@ -994,6 +995,7 @@ class TestLearningKernelCli(unittest.TestCase):
             self.assertIn("Own project", titles)
             self.assertNotIn("Other global", titles)
             self.assertNotIn("Other project", titles)
+            self.assertNotIn("Wrong project", titles)
 
     def test_memory_expertise_constraints_and_bootstrap_limits(self):
         with tempfile.TemporaryDirectory() as tmp, self.env(tmp), mock.patch.object(broccoli.learning_kernel_module, "MEMORY_LIMITS", {**broccoli.learning_kernel_module.MEMORY_LIMITS, "bootstrap_max_records": 1, "bootstrap_max_body_chars_per_record": 5, "bootstrap_max_total_chars": 100}):

@@ -1564,7 +1564,8 @@ class LearningKernel:
         query = f"""
             SELECT * FROM memory_records
             WHERE status='active'
-              AND ((subject_agent IS NULL AND scope IN ({scope_placeholders})) OR subject_agent=?)
+              AND scope IN ({scope_placeholders})
+              AND (subject_agent IS NULL OR subject_agent=?)
             ORDER BY CASE WHEN scope=? THEN 0 WHEN subject_agent=? THEN 1 WHEN scope=? THEN 2 ELSE 3 END,
                      validated_at DESC, title, memory_id
         """
