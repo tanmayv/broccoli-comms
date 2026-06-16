@@ -51,10 +51,10 @@ let
   # Keep the default runtime/socket owned by the Broccoli CLI itself:
   # ${XDG_RUNTIME_DIR:-/tmp/$UID}/broccoli-comms/agent-tracker.sock.
   # Home Manager only pins BROCCOLI_COMMS_RUNTIME_DIR when explicitly configured.
-  broccoliRuntimeDir = cfg.runtimeDir;
-  broccoliCacheDir = if cfg.cacheDir != null then cfg.cacheDir else "${cacheRoot}/broccoli-comms";
-  broccoliConfigDir = if cfg.configDir != null then cfg.configDir else "${configRoot}/broccoli-comms";
-  broccoliAgentRootDir = cfg.agentRootDir;
+  broccoliRuntimeDir = cfg.config.paths.runtimeDir;
+  broccoliCacheDir = if cfg.config.paths.cacheDir != null then cfg.config.paths.cacheDir else "${cacheRoot}/broccoli-comms";
+  broccoliConfigDir = if cfg.config.paths.configDir != null then cfg.config.paths.configDir else "${configRoot}/broccoli-comms";
+  broccoliAgentRootDir = cfg.config.paths.agentRootDir;
   trackerSocket = if broccoliRuntimeDir != null then "${broccoliRuntimeDir}/agent-tracker.sock" else null;
   trackerStdout = "${broccoliCacheDir}/launchd.stdout.log";
   trackerStderr = "${broccoliCacheDir}/launchd.stderr.log";
@@ -66,28 +66,64 @@ let
       cache_dir = broccoliCacheDir;
       config_dir = broccoliConfigDir;
       "agent-root-dir" = broccoliAgentRootDir;
+      tmux_socket = cfg.config.paths.tmuxSocket;
+      agent_tracker_socket = cfg.config.paths.trackerSocket;
+      permission_detection_config = cfg.config.paths.permissionDetectionConfig;
     };
-    tracker.http_port = cfg.tracker.httpPort;
-    registry = {
-      heartbeat_seconds = cfg.tracker.registryHeartbeatSeconds;
-      auth_enabled = cfg.tracker.registryAuth;
-      remote_pane_input_enabled = cfg.tracker.remotePaneInput.enable;
+    tracker = compactAttrs {
+      poll_interval = cfg.config.tracker.pollInterval;
+      heartbeat_stale_seconds = cfg.config.tracker.heartbeatStaleSeconds;
+      heartbeat_grace_seconds = cfg.config.tracker.heartbeatGraceSeconds;
+      max_delivery_bytes = cfg.config.tracker.maxDeliveryBytes;
+      http_port = cfg.config.tracker.httpPort;
+      hostname = cfg.config.tracker.hostname;
+      broad_watch_enabled = cfg.config.tracker.broadWatchEnabled;
+      tracker_id = cfg.config.tracker.trackerId;
+      address = cfg.config.tracker.address;
     };
-    ui.capture_pane_default_lines = cfg.tracker.capturePaneDefaultLines;
-    core.enable_reliable_send_keys = cfg.tracker.enableReliableSendKeys;
-    scheduled_jobs = {
-      enabled = true;
-      agent_task_nudge = {
-        enabled = true;
-        interval_seconds = cfg.tracker.agentTaskNudgeIntervalSeconds;
-        backoff_multiplier = cfg.tracker.agentTaskNudgeBackoffMultiplier;
-        max_nudges = cfg.tracker.agentTaskNudgeMaxNudges;
+    registry = compactAttrs {
+      auth_enabled = cfg.config.registry.authEnabled;
+      token = cfg.config.registry.token;
+      heartbeat_seconds = cfg.config.registry.heartbeatSeconds;
+      delivery_wait_seconds = cfg.config.registry.deliveryWaitSeconds;
+      delivery_target_grace_seconds = cfg.config.registry.deliveryTargetGraceSeconds;
+      remote_pane_input_max_text_bytes = cfg.config.registry.remotePaneInputMaxTextBytes;
+      remote_pane_input_max_keys = cfg.config.registry.remotePaneInputMaxKeys;
+      pane_output_events_enabled = cfg.config.registry.paneOutputEventsEnabled;
+      pane_output_event_ttl_seconds = cfg.config.registry.paneOutputEventTtlSeconds;
+      remote_run_enabled = cfg.config.registry.remoteRunEnabled;
+      endpoints = cfg.config.tracker.registries;
+    };
+    ui = compactAttrs {
+      unseen_inbox_reminder_seconds = cfg.config.ui.unseenInboxReminderSeconds;
+      capture_pane_default_lines = cfg.config.ui.capturePaneDefaultLines;
+      default_mailbox_name = cfg.config.ui.defaultMailboxName;
+      focus_remote_messages = cfg.config.ui.focusRemoteMessages;
+      remote_pane_input_enabled = cfg.config.ui.remotePaneInputEnabled;
+      debug_log = cfg.config.ui.debugLog;
+    };
+    core = compactAttrs {
+      enable_reliable_send_keys = cfg.config.core.enableReliableSendKeys;
+      tmux_mode = cfg.config.core.tmuxMode;
+    };
+    scheduled_jobs = compactAttrs {
+      enabled = cfg.config.scheduledJobs.enable;
+      agent_task_nudge = compactAttrs {
+        enabled = cfg.config.scheduledJobs.agentTaskNudge.enable;
+        interval_seconds = cfg.config.scheduledJobs.agentTaskNudge.intervalSeconds;
+        max_nudges = cfg.config.scheduledJobs.agentTaskNudge.maxNudges;
+        backoff_multiplier = cfg.config.scheduledJobs.agentTaskNudge.backoffMultiplier;
+        state_path = cfg.config.scheduledJobs.agentTaskNudge.statePath;
       };
     };
-    providers = lib.mapAttrs (_: providerToml) cfg.providers;
+    pane_output = compactAttrs {
+      enabled = cfg.config.paneOutput.enable;
+      agent_types = cfg.config.paneOutput.agentTypes;
+    };
+    providers = lib.mapAttrs (_: providerToml) cfg.config.providers;
   };
 
-  escapedRegistries = builtins.replaceStrings ["\""] ["\\\""] (builtins.toJSON cfg.tracker.registries);
+  escapedRegistries = builtins.replaceStrings ["\""] ["\\\""] (builtins.toJSON cfg.config.tracker.registries);
 
   envList = attrs: lib.mapAttrsToList (name: value: "${name}=\"${builtins.replaceStrings ["\""] ["\\\""] (toString value)}\"") attrs;
   optionalEnv = name: value: lib.optionalAttrs (value != null) { ${name} = value; };
@@ -110,13 +146,13 @@ let
       "/sbin"
       (lib.makeBinPath [ pkgs.tmux pkgs.coreutils pkgs.gnugrep pkgs.procps pkgs.bash ])
     ];
-  } // optionalEnv "AGENT_TRACKER_HOSTNAME" cfg.tracker.hostname
+  } // optionalEnv "AGENT_TRACKER_HOSTNAME" cfg.config.tracker.hostname
     // optionalEnv "AGENT_TRACKER_TMUX_SOCKET" cfg.tracker.tmuxSocketPath
-    // optionalEnv "AGENT_REGISTRY_TOKEN" cfg.tracker.registryToken
-    // lib.optionalAttrs (cfg.tracker.registries != []) {
-      AGENT_REGISTRIES_JSON = builtins.toJSON cfg.tracker.registries;
+    // optionalEnv "AGENT_REGISTRY_TOKEN" (if cfg.tracker.registryToken != null then cfg.tracker.registryToken else cfg.config.registry.token)
+    // lib.optionalAttrs (cfg.config.tracker.registries != []) {
+      AGENT_REGISTRIES_JSON = builtins.toJSON cfg.config.tracker.registries;
     }
-    // lib.optionalAttrs cfg.tracker.remotePaneInput.enable {
+    // lib.optionalAttrs cfg.config.ui.remotePaneInputEnabled {
       BROCCOLI_COMMS_REMOTE_PANE_INPUT_ENABLED = "1";
     }
     // cfg.tracker.environment;
@@ -146,7 +182,7 @@ PY
       base="$(printf '%s' "$base" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9._-' '-' | sed 's/^-//; s/-$//')"
       export AGENT_TRACKER_HOSTNAME="''${base:-${config.home.username}}-$suffix"
     fi
-    ${lib.optionalString (cfg.tracker.registryAuth && cfg.tracker.registryTokenFile != null) ''export AGENT_REGISTRY_TOKEN="$(cat ${lib.escapeShellArg (toString cfg.tracker.registryTokenFile)})"''}
+    ${lib.optionalString (cfg.config.registry.authEnabled && cfg.tracker.registryTokenFile != null) ''export AGENT_REGISTRY_TOKEN="$(cat ${lib.escapeShellArg (toString cfg.tracker.registryTokenFile)})"''}
     exec ${pcfg.package}/bin/broccoli-comms agent-tracker daemon
   '';
 
@@ -154,7 +190,7 @@ PY
   registryCacheDir = if cfg.registry.cacheDir != null then cfg.registry.cacheDir else "${broccoliCacheDir}/agent-registry";
   registryEnv = broccoliEnv // {
     PATH = trackerEnv.PATH;
-  } // lib.optionalAttrs cfg.tracker.remotePaneInput.enable {
+  } // lib.optionalAttrs cfg.config.ui.remotePaneInputEnabled {
     BROCCOLI_COMMS_REMOTE_PANE_INPUT_REGISTRY_ENABLED = "1";
     AGENT_REGISTRY_REMOTE_PANE_INPUT_ENABLED = "1";
   } // cfg.registry.environment;
@@ -212,86 +248,143 @@ in {
 
   options.services.broccoli-comms = with lib; {
     enable = mkEnableOption "Broccoli Comms agent-tracker service";
-    runtimeDir = mkOption { type = types.nullOr types.str; default = null; description = "Optional BROCCOLI_COMMS_RUNTIME_DIR. When unset, Broccoli Comms uses its canonical CLI default: \${XDG_RUNTIME_DIR:-/tmp/$UID}/broccoli-comms."; };
-    cacheDir = mkOption { type = types.nullOr types.str; default = null; description = "Optional BROCCOLI_COMMS_CACHE_DIR. Defaults to ~/.cache/broccoli-comms for Home Manager-managed logs and state."; };
-    configDir = mkOption { type = types.nullOr types.str; default = null; description = "Optional BROCCOLI_COMMS_CONFIG_DIR. Defaults to ~/.config/broccoli-comms."; };
-    agentRootDir = mkOption { type = types.nullOr types.str; default = null; description = "Optional stable root for `broccoli-comms run` agent workspaces. When unset, run uses temp directories; when set, workspaces are <agentRootDir>/<agent-name>."; };
-    providers = mkOption {
-      type = types.attrsOf providerSpecType;
-      default = {
-        jetski = {
-          cmd = "/google/bin/releases/jetski-devs/tools/cli";
-          agentsDir = ".agents";
-          contextLayout = "jetski";
-          agentRootDir = "${config.home.homeDirectory}/agents-root";
-          autoAcceptFlag = "--dangerously-skip-permissions";
-          promptFlagName = "--prompt-interactive";
-        };
-        pi = {
-          cmd = "pi";
-          autoAcceptFlag = "";
-        };
-        codex = {
-          cmd = "codex";
-          autoAcceptFlag = "--dangerously-bypass-approvals-and-sandbox";
-        };
-        claude = {
-          cmd = "claude";
-          agentRootDir = "${config.home.homeDirectory}/.agents-root";
-          autoAcceptFlag = "--dangerously-skip-permissions";
-        };
-      };
-      description = "Provider defaults rendered to ~/.config/broccoli-comms/config.toml under [providers.<name>].";
-    };
 
     tracker = {
-      enable = mkOption { type = types.bool; default = cfg.enable; description = "Enable agent-tracker as a systemd user service or launchd agent."; };
-      package = mkOption { type = types.package; default = packages.agentTracker; defaultText = "self.packages.<system>.agentTracker"; };
+      enable = mkOption { type = types.bool; default = cfg.enable; description = "Enable agent-tracker as a systemd user service or launchd agent. Defaults to services.broccoli-comms.enable."; };
+      package = mkOption { type = types.package; default = packages.agentTracker; defaultText = "self.packages.<system>.agentTracker"; description = "Tracker daemon package to execute. Defaults to agentTracker package."; };
       hostname = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "Optional AGENT_TRACKER_HOSTNAME override. When null, the service generates a stable <machine-hostname>-<three-letter-suffix> identity and stores the suffix under XDG state.";
+        description = "Optional AGENT_TRACKER_HOSTNAME override. When null, the service generates a stable <machine-hostname>-<three-letter-suffix> identity and stores the suffix under XDG state. Defaults to null.";
       };
-      socketPath = mkOption { type = types.nullOr types.str; default = null; description = "Deprecated and ignored by the Broccoli Comms app-owned runtime. Set services.broccoli-comms.runtimeDir instead; the socket is <runtimeDir>/agent-tracker.sock."; };
-      cacheDir = mkOption { type = types.nullOr types.str; default = null; description = "Deprecated and ignored by the Broccoli Comms app-owned runtime. Set services.broccoli-comms.cacheDir instead."; };
-      tmuxSocketPath = mkOption { type = types.nullOr types.str; default = null; description = "Optional AGENT_TRACKER_TMUX_SOCKET."; };
-      httpPort = mkOption { type = types.port; default = 19876; };
-      registries = mkOption { type = types.listOf registrySpecType; default = []; description = "Registries published to AGENT_REGISTRIES_JSON."; };
-      registryAuth = mkOption { type = types.bool; default = false; };
-      registryTokenFile = mkOption { type = types.nullOr types.path; default = null; };
-      registryToken = mkOption { type = types.nullOr types.str; default = null; description = "Inline registry token. Prefer registryTokenFile for secrets."; };
-      registryHeartbeatSeconds = mkOption { type = types.ints.positive; default = 30; };
-      enableReliableSendKeys = mkOption { type = types.bool; default = true; };
-      capturePaneDefaultLines = mkOption { type = types.ints.positive; default = 20; };
-      agentTaskNudgeIntervalSeconds = mkOption { type = types.ints.positive; default = 600; description = "Base frequency, in seconds, for the local-agent scheduled task nudge job."; };
-      agentTaskNudgeBackoffMultiplier = mkOption { type = types.ints.positive; default = 2; description = "Per-task exponential backoff multiplier for scheduled task nudges."; };
-      agentTaskNudgeMaxNudges = mkOption { type = types.ints.unsigned; default = 5; description = "Maximum number of scheduled nudges to send for a single task."; };
-      remotePaneInput.enable = mkOption { type = types.bool; default = true; description = "Enable registry-routed remote direct pane input by default. Set to false to opt out of remote pane control."; };
-      environment = mkOption { type = types.attrsOf types.str; default = {}; description = "Extra environment for the tracker service."; };
+      socketPath = mkOption { type = types.nullOr types.str; default = null; description = "Deprecated custom tracker socket path override. Defaults to null."; };
+      cacheDir = mkOption { type = types.nullOr types.str; default = null; description = "Deprecated custom tracker cache directory path override. Defaults to null."; };
+      tmuxSocketPath = mkOption { type = types.nullOr types.str; default = null; description = "Optional AGENT_TRACKER_TMUX_SOCKET environment variable override. Defaults to null."; };
+      registryToken = mkOption { type = types.nullOr types.str; default = null; description = "Inline registry token override. Defaults to null."; };
+      registryTokenFile = mkOption { type = types.nullOr types.path; default = null; description = "Registry token file path override. Defaults to null."; };
+      environment = mkOption { type = types.attrsOf types.str; default = {}; description = "Extra environment variables for the tracker service. Defaults to empty set."; };
     };
 
     registry = {
       enable = mkEnableOption "Broccoli Comms agent-registry service";
-      package = mkOption { type = types.package; default = packages.agentRegistry; defaultText = "self.packages.<system>.agentRegistry"; };
-      host = mkOption { type = types.str; default = "127.0.0.1"; description = "Bind host for agent-registry."; };
-      port = mkOption { type = types.port; default = 18000; };
-      name = mkOption { type = types.str; default = "local"; description = "Logical registry name used by `broccoli-comms registry start`."; };
-      auth = mkOption { type = types.bool; default = false; };
-      tokenFile = mkOption { type = types.nullOr types.path; default = null; };
-      staleSeconds = mkOption { type = types.int; default = 60; };
-      goneSeconds = mkOption { type = types.int; default = 180; };
-      statePath = mkOption { type = types.nullOr types.str; default = null; };
-      cacheDir = mkOption { type = types.nullOr types.str; default = null; };
-      environment = mkOption { type = types.attrsOf types.str; default = {}; };
+      package = mkOption { type = types.package; default = packages.agentRegistry; defaultText = "self.packages.<system>.agentRegistry"; description = "Registry daemon package to execute. Defaults to agentRegistry package."; };
+      host = mkOption { type = types.str; default = "127.0.0.1"; description = "Bind host for agent-registry. Defaults to 127.0.0.1."; };
+      port = mkOption { type = types.port; default = 18000; description = "Bind port for agent-registry. Defaults to 18000."; };
+      name = mkOption { type = types.str; default = "local"; description = "Logical registry name used by `broccoli-comms registry start`. Defaults to local."; };
+      auth = mkOption { type = types.bool; default = false; description = "Enable authentication for the registry service daemon. Defaults to false."; };
+      tokenFile = mkOption { type = types.nullOr types.path; default = null; description = "Registry token file path containing valid client credentials. Defaults to null."; };
+      staleSeconds = mkOption { type = types.int; default = 60; description = "Seconds of inactivity before peer heartbeats are marked stale. Defaults to 60."; };
+      goneSeconds = mkOption { type = types.int; default = 180; description = "Seconds of inactivity before peer registration is fully pruned. Defaults to 180."; };
+      statePath = mkOption { type = types.nullOr types.str; default = null; description = "Path to the registry state JSON file. Defaults to state database path."; };
+      cacheDir = mkOption { type = types.nullOr types.str; default = null; description = "Path to the registry cache directory. Defaults to cache directory path."; };
+      environment = mkOption { type = types.attrsOf types.str; default = {}; description = "Extra environment variables for the registry service. Defaults to empty set."; };
+    };
+
+    config = {
+      paths = {
+        runtimeDir = mkOption { type = types.nullOr types.str; default = null; description = "Optional custom runtime directory. If null, the CLI defaults to \${XDG_RUNTIME_DIR:-/tmp/\$UID}/broccoli-comms. Defaults to null."; };
+        cacheDir = mkOption { type = types.nullOr types.str; default = null; description = "Optional custom cache/log directory. If null, defaults to ~/.cache/broccoli-comms. Defaults to null."; };
+        configDir = mkOption { type = types.nullOr types.str; default = null; description = "Optional custom config directory. If null, defaults to ~/.config/broccoli-comms. Defaults to null."; };
+        agentRootDir = mkOption { type = types.nullOr types.str; default = null; description = "Stable root for agent workspaces. When null, temporary workspaces are generated. Defaults to null."; };
+        tmuxSocket = mkOption { type = types.nullOr types.str; default = null; description = "Fallback path to the private tmux socket used when tmuxMode is set to \"private\". Defaults to null."; };
+        trackerSocket = mkOption { type = types.nullOr types.str; default = null; description = "Deprecated custom tracker socket path override. Defaults to null."; };
+        permissionDetectionConfig = mkOption { type = types.nullOr types.str; default = null; description = "Custom JSON path containing allowed system command prefixes and settings. Defaults to null."; };
+      };
+
+      tracker = {
+        pollInterval = mkOption { type = types.ints.positive; default = 5; description = "Frequency (in seconds) that the tracker polls agent tmux pane status. Defaults to 5."; };
+        heartbeatStaleSeconds = mkOption { type = types.ints.positive; default = 20; description = "Mark an agent's heartbeat as stale after this duration (in seconds). Defaults to 20."; };
+        heartbeatGraceSeconds = mkOption { type = types.ints.positive; default = 30; description = "Mark an agent as gone/inactive after this additional grace period (in seconds). Defaults to 30."; };
+        maxDeliveryBytes = mkOption { type = types.ints.positive; default = 5242880; description = "Maximum body size limit (in bytes) for incoming registry HTTP requests. Defaults to 5242880."; };
+        httpPort = mkOption { type = types.port; default = 19876; description = "The local port the tracker runs its HTTP server on. Defaults to 19876."; };
+        hostname = mkOption { type = types.nullOr types.str; default = null; description = "Host name override. If null, a stable <hostname>-<3-letter-random-suffix> is generated. Defaults to null."; };
+        broadWatchEnabled = mkOption { type = types.bool; default = false; description = "Enable broad/transitive workspace watching. Defaults to false."; };
+        trackerId = mkOption { type = types.nullOr types.str; default = null; description = "Specific UUID override for this tracker. Defaults to a DNS UUID derived from hostname if null. Defaults to null."; };
+        address = mkOption { type = types.nullOr types.str; default = null; description = "External IP/hostname address of this tracker. If null, defaults to the hostname. Defaults to null."; };
+        registries = mkOption { type = types.listOf registrySpecType; default = []; description = "List of target central registries. Each contains name (string), url (string), and optional token-file (string). Defaults to []."; };
+      };
+
+      registry = {
+        authEnabled = mkOption { type = types.bool; default = true; description = "Enable central registry authentication validation. Defaults to true."; };
+        token = mkOption { type = types.nullOr types.str; default = null; description = "Inline access token string. Prefer registryTokenFile for security. Defaults to null."; };
+        heartbeatSeconds = mkOption { type = types.ints.positive; default = 30; description = "Frequency (in seconds) the tracker pushes status updates to the registry. Defaults to 30."; };
+        deliveryWaitSeconds = mkOption { type = types.ints.positive; default = 25; description = "Registry long-poll wait time before timeout (in seconds). Defaults to 25."; };
+        deliveryTargetGraceSeconds = mkOption { type = types.ints.positive; default = 60; description = "Post-delivery grace period before messages are pruned (in seconds). Defaults to 60."; };
+        remotePaneInputMaxTextBytes = mkOption { type = types.ints.positive; default = 4096; description = "Size limit (in bytes) for text payloads received from remote control requests. Defaults to 4096."; };
+        remotePaneInputMaxKeys = mkOption { type = types.ints.positive; default = 16; description = "Keypress event limit per remote command packet. Defaults to 16."; };
+        paneOutputEventsEnabled = mkOption { type = types.bool; default = true; description = "Log and publish tmux output buffers to the central registry. Defaults to true."; };
+        paneOutputEventTtlSeconds = mkOption { type = types.ints.positive; default = 86400; description = "TTL (in seconds) for published output events on the registry. Defaults to 86400 (24 hours)."; };
+        remoteRunEnabled = mkOption { type = types.bool; default = true; description = "Allow starting agents remotely via the registry. Defaults to true."; };
+      };
+
+      ui = {
+        unseenInboxReminderSeconds = mkOption { type = types.ints.positive; default = 900; description = "Reminder interval (in seconds) for unacknowledged inbox items. Defaults to 900 (15 minutes)."; };
+        capturePaneDefaultLines = mkOption { type = types.ints.positive; default = 20; description = "Default number of scrollback lines captured when inspecting agent terminals. Defaults to 20."; };
+        defaultMailboxName = mkOption { type = types.str; default = "agent-communicator"; description = "Default pane mailbox identity. Defaults to \"agent-communicator\"."; };
+        focusRemoteMessages = mkOption { type = types.bool; default = false; description = "Automatically shift focus to incoming messages from remote hosts. Defaults to false."; };
+        remotePaneInputEnabled = mkOption { type = types.bool; default = true; description = "Boolean check for the TUI to decide if remote pane inputs are supported. Defaults to true."; };
+        debugLog = mkOption { type = types.nullOr types.str; default = null; description = "Output destination file path for TUI logs (e.g. debug logging info). Defaults to null."; };
+      };
+
+      core = {
+        enableReliableSendKeys = mkOption { type = types.bool; default = true; description = "Utilize rate-limited tmux inputs to guarantee keystroke ordering. Defaults to true."; };
+        tmuxMode = mkOption { type = types.enum [ "default" "private" ]; default = "default"; description = "Determines how the CLI resolves tmux socket paths. \"private\" redirects CLI queries to the configured fallback socket under paths.tmuxSocket. Defaults to \"default\"."; };
+      };
+
+      scheduledJobs = {
+        enable = mkOption { type = types.bool; default = true; description = "Enable central background job runner. Defaults to true."; };
+        agentTaskNudge = {
+          enable = mkOption { type = types.bool; default = true; description = "Activate periodic nudging of active agents when tasks remain stagnant. Defaults to true."; };
+          intervalSeconds = mkOption { type = types.ints.positive; default = 600; description = "Nudge frequency interval in seconds. Defaults to 600 (10 minutes)."; };
+          maxNudges = mkOption { type = types.ints.positive; default = 5; description = "Maximum number of reminders sent for a stagnant task. Defaults to 5."; };
+          backoffMultiplier = mkOption { type = types.ints.positive; default = 2; description = "Exponential backoff multiplier between consecutive reminders. Defaults to 2."; };
+          statePath = mkOption { type = types.nullOr types.str; default = null; description = "Custom JSON path to store sent-nudge counts per task. Defaults to a database under the cache dir. Defaults to null."; };
+        };
+      };
+
+      paneOutput = {
+        enable = mkOption { type = types.bool; default = false; description = "Enable active background capturing of terminal updates. Defaults to false."; };
+        agentTypes = mkOption { type = types.listOf types.str; default = []; description = "Capture only terminal feeds belonging to these specific agent types (e.g. [\"pi\", \"claude\"]). Defaults to []."; };
+      };
+
+      providers = mkOption {
+        type = types.attrsOf providerSpecType;
+        default = {
+          jetski = {
+            cmd = "/google/bin/releases/jetski-devs/tools/cli";
+            agentsDir = ".agents";
+            contextLayout = "jetski";
+            agentRootDir = "${config.home.homeDirectory}/agents-root";
+            autoAcceptFlag = "--dangerously-skip-permissions";
+            promptFlagName = "--prompt-interactive";
+          };
+          pi = {
+            cmd = "pi";
+            autoAcceptFlag = "";
+          };
+          codex = {
+            cmd = "codex";
+            autoAcceptFlag = "--dangerously-bypass-approvals-and-sandbox";
+          };
+          claude = {
+            cmd = "claude";
+            agentRootDir = "${config.home.homeDirectory}/.agents-root";
+            autoAcceptFlag = "--dangerously-skip-permissions";
+          };
+        };
+        description = "Provider defaults rendered to ~/.config/broccoli-comms/config.toml under [providers.<name>].";
+      };
     };
   };
 
   config = lib.mkMerge [
     {
-      warnings = lib.optionals (cfg.tracker.socketPath != null) [
-        "services.broccoli-comms.tracker.socketPath is deprecated and ignored by the app-owned Broccoli Comms runtime; set services.broccoli-comms.runtimeDir instead."
+      warnings = lib.optionals (cfg.config.paths.trackerSocket != null) [
+        "services.broccoli-comms.config.paths.trackerSocket is deprecated; set services.broccoli-comms.config.paths.runtimeDir instead."
+      ] ++ lib.optionals (cfg.tracker.socketPath != null) [
+        "services.broccoli-comms.tracker.socketPath is deprecated; set services.broccoli-comms.config.paths.runtimeDir instead."
       ] ++ lib.optionals (cfg.tracker.cacheDir != null) [
-        "services.broccoli-comms.tracker.cacheDir is deprecated and ignored by the app-owned Broccoli Comms runtime; set services.broccoli-comms.cacheDir instead."
+        "services.broccoli-comms.tracker.cacheDir is deprecated; set services.broccoli-comms.config.paths.cacheDir instead."
       ];
     }
 
@@ -316,7 +409,7 @@ in {
     })
 
     (lib.mkIf cfg.tracker.enable {
-      assertions = [{ assertion = !cfg.tracker.registryAuth || cfg.tracker.registryTokenFile != null || cfg.tracker.registryToken != null; message = "services.broccoli-comms.tracker.registryTokenFile or registryToken is required when registryAuth is enabled."; }];
+      assertions = [{ assertion = !cfg.config.registry.authEnabled || cfg.tracker.registryTokenFile != null || cfg.tracker.registryToken != null || cfg.config.registry.token != null; message = "services.broccoli-comms.tracker.registryTokenFile, registryToken, or config.registry.token is required when authEnabled is enabled."; }];
       home.activation.ensureBroccoliCommsRuntimeDirs = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         mkdir -p ${lib.escapeShellArg broccoliCacheDir} ${lib.escapeShellArg broccoliConfigDir}
         ${lib.optionalString (broccoliRuntimeDir != null) "mkdir -p ${lib.escapeShellArg broccoliRuntimeDir}"}
