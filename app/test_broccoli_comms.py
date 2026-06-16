@@ -403,6 +403,7 @@ agent_communicator_tui = "/config/agent-communicator"
         workspace.assert_called_once()
         self.assertEqual(workspace.call_args.kwargs["agents_dir"], ".agents")
         self.assertEqual(workspace.call_args.kwargs["context_layout"], "jetski")
+        self.assertEqual(workspace.call_args.kwargs["agent_root_dir"], str(Path.home() / "agents-root"))
         launched = [call for call in calls if call and call[0] == "new-window"][0][-1]
         self.assertIn("BROCCOLI_AGENTS_DIR=.agents", launched)
         self.assertIn("BROCCOLI_COMMS_CONTEXT_LAYOUT=jetski", launched)
@@ -1138,10 +1139,15 @@ agent_communicator_tui = "/config/agent-communicator"
             'contextLayout = "jetski"',
             'autoAcceptFlag = "--dangerously-skip-permissions"',
             'promptFlagName = "--prompt-interactive"',
+            'defaultInitialMessage = "Check if any task are assigned to you, if yes, start working on them, else be on standby"',
+            'remotePaneInput.enable = mkOption { type = types.bool; default = true;',
+            'remote_pane_input_enabled = cfg.tracker.remotePaneInput.enable;',
+            'BROCCOLI_COMMS_REMOTE_PANE_INPUT_REGISTRY_ENABLED = "1";',
             'cmd = "pi"',
             'cmd = "codex"',
             'autoAcceptFlag = "--dangerously-bypass-approvals-and-sandbox"',
             'cmd = "claude"',
+            'agentRootDir = "${config.home.homeDirectory}/agents-root"',
             'agentRootDir = "${config.home.homeDirectory}/.agents-root"',
         ]:
             self.assertIn(want, text)
@@ -1227,7 +1233,7 @@ agent_communicator_tui = "/config/agent-communicator"
                 return {"success": True}
             return None
 
-        task = {"task_id": "task-1", "title": "Remote visible", "status": "review", "participants": []}
+        task = {"task_id": "task-1", "title": "Remote visible", "status": "review", "assigned_agent": "remote-host/worker", "participants": []}
         with mock.patch.object(broccoli_comms_app, "tracker_rpc", side_effect=fake_tracker_rpc):
             result = broccoli_comms_app.notify_task_update(task, "coder", {"status": "review"})
 
@@ -1236,6 +1242,7 @@ agent_communicator_tui = "/config/agent-communicator"
         self.assertEqual(send_calls[1][1]["target_address"], "remote-host/agent-communicator")
         self.assertEqual(send_calls[1][1]["metadata"]["delivery_scope"], "shared_service_broadcast")
         self.assertEqual(send_calls[1][1]["metadata"]["content_type"], "application/vnd.broccoli.task-update+json")
+        self.assertEqual(send_calls[1][1]["metadata"]["task_assigned_agent"], "remote-host/worker")
         self.assertTrue(result["sent"])
         self.assertEqual(result["ui_broadcast"]["remote"][0]["target"], "remote-host/agent-communicator")
 

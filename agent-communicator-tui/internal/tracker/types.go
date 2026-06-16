@@ -132,6 +132,7 @@ type Message struct {
 	TaskID                  string       `json:"task_id,omitempty"`
 	TaskTitle               string       `json:"task_title,omitempty"`
 	TaskStatus              string       `json:"task_status,omitempty"`
+	TaskAssignedAgent       string       `json:"task_assigned_agent,omitempty"`
 	TaskNextStep            string       `json:"task_next_step,omitempty"`
 	ResultSummary           string       `json:"result_summary,omitempty"`
 	TaskChainID             string       `json:"task_chain_id,omitempty"`

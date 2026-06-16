@@ -4,6 +4,7 @@ let
   pcfg = config.programs.broccoli-comms;
   packages = self.packages.${pkgs.system};
   configTomlFormat = pkgs.formats.toml {};
+  defaultInitialMessage = "Check if any task are assigned to you, if yes, start working on them, else be on standby";
 
   registrySpecType = lib.types.submodule {
     options = {
@@ -25,7 +26,7 @@ let
       agentRootDir = lib.mkOption { type = lib.types.nullOr lib.types.str; default = null; description = "Optional stable root for this provider's agent workspaces."; };
       autoAcceptFlag = lib.mkOption { type = lib.types.str; default = ""; description = "Provider flag that enables auto-accept/auto-approve behavior. Empty disables it."; };
       promptFlagName = lib.mkOption { type = lib.types.str; default = "--"; description = "Provider flag for the initial prompt. Use -- when the prompt is positional."; };
-      initialMessage = lib.mkOption { type = lib.types.nullOr lib.types.str; default = "Read AGENTS.md, bootstrap with Broccoli Comms, then start the assigned task."; description = "Initial prompt passed to the provider; null disables it."; };
+      initialMessage = lib.mkOption { type = lib.types.nullOr lib.types.str; default = defaultInitialMessage; description = "Initial prompt passed to the provider; null disables it. Defaults to checking assigned tasks and standing by when none are ready."; };
       tmuxSubmitKey = lib.mkOption { type = lib.types.nullOr lib.types.str; default = null; description = "Optional tmux key used to submit text for this provider, for example C-M."; };
       extraSettings = lib.mkOption { type = lib.types.attrs; default = {}; description = "Additional raw TOML settings for this provider."; };
     };
@@ -70,6 +71,7 @@ let
     registry = {
       heartbeat_seconds = cfg.tracker.registryHeartbeatSeconds;
       auth_enabled = cfg.tracker.registryAuth;
+      remote_pane_input_enabled = cfg.tracker.remotePaneInput.enable;
     };
     ui.capture_pane_default_lines = cfg.tracker.capturePaneDefaultLines;
     core.enable_reliable_send_keys = cfg.tracker.enableReliableSendKeys;
@@ -152,6 +154,9 @@ PY
   registryCacheDir = if cfg.registry.cacheDir != null then cfg.registry.cacheDir else "${broccoliCacheDir}/agent-registry";
   registryEnv = broccoliEnv // {
     PATH = trackerEnv.PATH;
+  } // lib.optionalAttrs cfg.tracker.remotePaneInput.enable {
+    BROCCOLI_COMMS_REMOTE_PANE_INPUT_REGISTRY_ENABLED = "1";
+    AGENT_REGISTRY_REMOTE_PANE_INPUT_ENABLED = "1";
   } // cfg.registry.environment;
   registryStart = pkgs.writeShellScript "broccoli-comms-agent-registry-start" ''
     exec ${pcfg.package}/bin/broccoli-comms registry start --foreground --force \
@@ -218,7 +223,7 @@ in {
           cmd = "/google/bin/releases/jetski-devs/tools/cli";
           agentsDir = ".agents";
           contextLayout = "jetski";
-          agentRootDir = "${config.home.homeDirectory}/.agents-root";
+          agentRootDir = "${config.home.homeDirectory}/agents-root";
           autoAcceptFlag = "--dangerously-skip-permissions";
           promptFlagName = "--prompt-interactive";
         };
@@ -261,7 +266,7 @@ in {
       agentTaskNudgeIntervalSeconds = mkOption { type = types.ints.positive; default = 600; description = "Base frequency, in seconds, for the local-agent scheduled task nudge job."; };
       agentTaskNudgeBackoffMultiplier = mkOption { type = types.ints.positive; default = 2; description = "Per-task exponential backoff multiplier for scheduled task nudges."; };
       agentTaskNudgeMaxNudges = mkOption { type = types.ints.unsigned; default = 5; description = "Maximum number of scheduled nudges to send for a single task."; };
-      remotePaneInput.enable = mkOption { type = types.bool; default = false; };
+      remotePaneInput.enable = mkOption { type = types.bool; default = true; description = "Enable registry-routed remote direct pane input by default. Set to false to opt out of remote pane control."; };
       environment = mkOption { type = types.attrsOf types.str; default = {}; description = "Extra environment for the tracker service."; };
     };
 

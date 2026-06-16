@@ -307,7 +307,7 @@ broccoli-comms agent-tracker send-text --no-submit alice "draft"
 broccoli-comms agent-tracker send-key alice C-c Enter
 ```
 
-Remote direct input uses the same `send_input` backend with a host-qualified `target_address`, but it is disabled by default and requires explicit gates:
+Remote direct input uses the same `send_input` backend with a host-qualified `target_address`. The Home Manager module enables the required managed-service gates by default and exposes `services.broccoli-comms.tracker.remotePaneInput.enable = false` as the opt-out. Outside those defaults it requires explicit gates:
 
 - sender tracker: `AGENT_TRACKER_REMOTE_PANE_INPUT_SEND_ENABLED=1`, `BROCCOLI_COMMS_REMOTE_PANE_INPUT_SEND_ENABLED=1`, or umbrella `BROCCOLI_COMMS_REMOTE_PANE_INPUT_ENABLED=1`
 - receiver tracker: `AGENT_TRACKER_REMOTE_PANE_INPUT_RECEIVE_ENABLED=1`, `BROCCOLI_COMMS_REMOTE_PANE_INPUT_RECEIVE_ENABLED=1`, or umbrella `BROCCOLI_COMMS_REMOTE_PANE_INPUT_ENABLED=1`

@@ -77,6 +77,9 @@ http_port = 19876
 [registry]
 heartbeat_seconds = 30
 auth_enabled = true
+# Home Manager enables remote direct pane input by default; set
+# services.broccoli-comms.tracker.remotePaneInput.enable = false to opt out.
+remote_pane_input_enabled = true
 
 [ui]
 capture_pane_default_lines = 20
@@ -97,20 +100,20 @@ max_nudges = 5
 cmd = "pi"
 auto-accept-flag = ""
 prompt-flag-name = "--"
-initial-message = "Read AGENTS.md, bootstrap with Broccoli Comms, then start the assigned task."
+initial-message = "Check if any task are assigned to you, if yes, start working on them, else be on standby"
 
 [providers.codex]
 cmd = "codex"
 auto-accept-flag = "--dangerously-bypass-approvals-and-sandbox"
 prompt-flag-name = "--"
-initial-message = "Read AGENTS.md, bootstrap with Broccoli Comms, then start the assigned task."
+initial-message = "Check if any task are assigned to you, if yes, start working on them, else be on standby"
 
 [providers.claude]
 cmd = "claude"
 agent-root-dir = "~/.agents-root"
 auto-accept-flag = "--dangerously-skip-permissions"
 prompt-flag-name = "--"
-initial-message = "Read AGENTS.md, bootstrap with Broccoli Comms, then start the assigned task."
+initial-message = "Check if any task are assigned to you, if yes, start working on them, else be on standby"
 ```
 
 Provider fields:
@@ -120,9 +123,9 @@ When installed through the Broccoli Comms Home Manager module, prefer Nix option
 - `cmd`: executable or absolute path to launch for the provider alias used in `broccoli-comms run NAME -- PROVIDER ...`.
 - `defaultArgs`: optional string or TOML array appended after `cmd` for every launch of that provider.
 - `auto-accept-flag`: optional provider-specific flag that enables auto-accept/auto-approve mode. Leave empty to disable.
-- `prompt-flag-name` plus `initial-message`: when both are non-empty, `broccoli-comms run` passes them as the provider's initial prompt/message flag and value. Use `--` for providers whose initial prompt is a positional argument. The message is passed as the configured provider argument; it is not converted into an inbox notification.
+- `prompt-flag-name` plus `initial-message`: when both are non-empty, `broccoli-comms run` passes them as the provider's initial prompt/message flag and value. Use `--` for providers whose initial prompt is a positional argument. The Home Manager default initial message is `Check if any task are assigned to you, if yes, start working on them, else be on standby`; explicit provider overrides still win. The message is passed as the configured provider argument; it is not converted into an inbox notification.
 - provider-level `agent-root-dir`: optional stable root for only that provider. It overrides `[paths].agent-root-dir` for runs launched through the provider alias.
-- `agentsDir`: optional provider customization subdirectory. The legacy layout writes bootstrap files under that subdirectory. The `jetski` provider uses `context-layout = "jetski"` by default: `AGENTS.md` stays at the workspace root, rules are written to `<agentsDir>/rules/{memory,habits,expertise}.md`, and skills are written to `<agentsDir>/skills/<skill>/SKILL.md`. Other providers keep the legacy layout unless `context-layout` is explicitly set.
+- `agentsDir`: optional provider customization subdirectory. The legacy layout writes bootstrap files under that subdirectory. The `jetski` provider uses `context-layout = "jetski"` by default: each workspace is created under `~/agents-root/<agent-name>` unless explicitly overridden, `AGENTS.md` stays at the workspace root, rules are written to `<agentsDir>/rules/{memory,habits,expertise}.md`, and skills are written to `<agentsDir>/skills/<skill>/SKILL.md`. Other providers keep the legacy layout unless `context-layout` is explicitly set.
 
 Path fields:
 
@@ -331,7 +334,7 @@ For loopback-only local testing, the registry can be started without auth:
 broccoli-comms registry start --host 127.0.0.1 --port 8080 --name local --noauth
 ```
 
-`--noauth` is only safe for loopback/local development. Registry startup does not enable remote direct pane input; remote direct input has separate security gates and remains disabled unless explicitly configured.
+`--noauth` is only safe for loopback/local development. Registry startup alone does not enable remote direct pane input; remote direct input has separate security gates. The Home Manager module enables those gates by default for managed Broccoli Comms services and can opt out with `services.broccoli-comms.tracker.remotePaneInput.enable = false`.
 
 ## Configured agents
 
@@ -498,7 +501,7 @@ broccoli-comms agent-tracker registry-status
 broccoli-comms agent-tracker capture-pane agent-communicator --last 80
 ```
 
-For explicit pane control, `broccoli-comms agent-tracker send-text TARGET TEXT`, `broccoli-comms agent-tracker send-text --no-submit TARGET TEXT`, and `broccoli-comms agent-tracker send-key TARGET KEY [KEY...]` call the tracker `send_input` backend directly. These bypass inbox messages. Local bare names/UUIDs use the registered tmux pane/socket metadata; remote `host/agent` targets are registry-routed only when explicitly enabled on sender, registry, and receiver (`BROCCOLI_COMMS_REMOTE_PANE_INPUT_ENABLED=1` or the narrower send/receive/registry env gates). Remote direct input is disabled by default and should be treated as dangerous pane control.
+For explicit pane control, `broccoli-comms agent-tracker send-text TARGET TEXT`, `broccoli-comms agent-tracker send-text --no-submit TARGET TEXT`, and `broccoli-comms agent-tracker send-key TARGET KEY [KEY...]` call the tracker `send_input` backend directly. These bypass inbox messages. Local bare names/UUIDs use the registered tmux pane/socket metadata; remote `host/agent` targets are registry-routed only when enabled on sender, registry, and receiver (`BROCCOLI_COMMS_REMOTE_PANE_INPUT_ENABLED=1` or the narrower send/receive/registry env gates). The Home Manager module enables these gates by default for managed services; set `services.broccoli-comms.tracker.remotePaneInput.enable = false` to opt out. Remote direct input should be treated as dangerous pane control.
 
 ```sh
 broccoli-comms agent-tracker send-text alice "hello"

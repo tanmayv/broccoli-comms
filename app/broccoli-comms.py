@@ -775,6 +775,8 @@ def _provider_launch_settings(command: list[str], *, apply_command_overrides: bo
         if "agentsDir" in provider_cfg:
             agents_dir = provider_cfg["agentsDir"]
         provider_agent_root_dir = provider_cfg.get("agent-root-dir", provider_cfg.get("agentRootDir", provider_cfg.get("agent_root_dir")))
+    if provider_alias == "jetski" and not provider_agent_root_dir:
+        provider_agent_root_dir = str(Path.home() / "agents-root")
     return command, agents_dir, provider_agent_root_dir, context_layout
 
 
@@ -2927,6 +2929,7 @@ def notify_task_update(task: dict, actor: str, updates: dict) -> dict:
         "task_id": task_id,
         "task_title": title,
         "task_status": status,
+        "task_assigned_agent": task.get("assigned_agent") or "",
         "task_next_step": task.get("next_step") or "",
         "result_summary": task.get("result_summary") or "",
         "source": "system/task-kernel",

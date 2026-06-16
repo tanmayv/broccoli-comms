@@ -665,12 +665,22 @@ func TestLoadInboxAvoidsExactSenderFilterForLegacyRemoteRows(t *testing.T) {
 	}
 }
 
-func TestFilterConversationKeepsTaskUpdatesAcrossFocusedRows(t *testing.T) {
+func TestFilterConversationKeepsOnlyRelevantTaskUpdates(t *testing.T) {
 	messages := []tracker.Message{
 		{Sender: "other", Body: "not selected"},
-		{Sender: "task-kernel", Body: "Task task-1 moved", Kind: "task_update", ContentType: taskUpdateContentType, TaskID: "task-1"},
+		{Sender: "task-kernel", Body: "Task task-1 moved", Kind: "task_update", ContentType: taskUpdateContentType, TaskID: "task-1", TaskAssignedAgent: "alpha"},
+		{Sender: "task-kernel", Body: "Task task-2 moved", Kind: "task_update", ContentType: taskUpdateContentType, TaskID: "task-2", TaskAssignedAgent: "beta"},
 	}
-	filtered := filterConversation(messages, agentRow{Name: "alpha", Scope: "local"})
+	filtered := filterConversation(messages, agentRow{Name: "alpha", Scope: "local", CurrentTaskID: "task-1"})
+	if len(filtered) != 1 || filtered[0].TaskID != "task-1" {
+		t.Fatalf("filtered = %+v", filtered)
+	}
+}
+
+func TestFilterConversationKeepsRemoteAssignedTaskUpdates(t *testing.T) {
+	messages := []tracker.Message{{Sender: "task-kernel", Body: "Task task-1 moved", Kind: "task_update", ContentType: taskUpdateContentType, TaskID: "task-1", TaskAssignedAgent: "host/alpha"}}
+	row := agentRow{Name: "host/alpha", Scope: "remote", Hostname: "host", AgentName: "alpha", TargetAddress: "host/alpha"}
+	filtered := filterConversation(messages, row)
 	if len(filtered) != 1 || filtered[0].TaskID != "task-1" {
 		t.Fatalf("filtered = %+v", filtered)
 	}

@@ -106,7 +106,7 @@ If `doctor` fails, install the missing runtime dependency or use the Nix package
 `broccoli-comms run NAME -- PROVIDER` can use provider-specific bootstrap paths from `~/.config/broccoli-comms/config.toml`.
 
 - Legacy/default providers that set `agentsDir` write generated bootstrap files under that directory, preserving existing behavior.
-- The `jetski` provider defaults to `context-layout = "jetski"`: `AGENTS.md` is written at the workspace root, rules are written to `.agents/rules/{memory,habits,expertise}.md`, and durable skills are written to `.agents/skills/<skill>/SKILL.md`.
+- The `jetski` provider defaults to `context-layout = "jetski"`: each workspace is created under `~/agents-root/<agent-name>` unless explicitly overridden, `AGENTS.md` is written at the workspace root, rules are written to `.agents/rules/{memory,habits,expertise}.md`, and durable skills are written to `.agents/skills/<skill>/SKILL.md`.
 - Non-Jetski providers keep the legacy layout unless `context-layout = "jetski"` is set explicitly.
 
 Example:
@@ -435,7 +435,7 @@ tmux-submit-key = "C-M"
 
 `send-message` inbox notifications and direct `send-text` submission choose the submit key from the target agent provider (`model_type`/`agent_type`/`agent_cmd`). `send-text --no-submit` still types text without pressing any submit key.
 
-Remote direct input is disabled by default and should be enabled only for trusted registries/trackers. Enable all required gates before using host-qualified remote targets:
+Remote direct input is enabled by default by the Home Manager module for managed Broccoli Comms services and should be used only with trusted registries/trackers. Set `services.broccoli-comms.tracker.remotePaneInput.enable = false` to opt out. When not using the Home Manager module defaults, enable all required gates before using host-qualified remote targets:
 
 ```sh
 # Sender tracker/TUI capability

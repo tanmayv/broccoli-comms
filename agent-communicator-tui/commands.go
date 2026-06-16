@@ -254,11 +254,38 @@ func filterConversation(messages []tracker.Message, row agentRow) []tracker.Mess
 	}
 	filtered := []tracker.Message{}
 	for _, msg := range messages {
-		if isTaskUpdateMessage(msg) || messageMatchesRow(msg, row) {
+		if taskUpdateMatchesRow(msg, row) || messageMatchesRow(msg, row) {
 			filtered = append(filtered, msg)
 		}
 	}
 	return filtered
+}
+
+func taskUpdateMatchesRow(msg tracker.Message, row agentRow) bool {
+	if !isTaskUpdateMessage(msg) {
+		return false
+	}
+	if row.CurrentTaskID != "" && msg.TaskID != "" && row.CurrentTaskID == msg.TaskID {
+		return true
+	}
+	assigned := strings.TrimSpace(msg.TaskAssignedAgent)
+	if assigned == "" {
+		return false
+	}
+	rowNames := []string{row.Name, row.AgentName, rowTarget(row)}
+	if row.Scope == "remote" && row.Hostname != "" && row.AgentName != "" {
+		rowNames = append(rowNames, row.Hostname+"/"+row.AgentName)
+	}
+	for _, name := range rowNames {
+		if strings.TrimSpace(name) == assigned {
+			return true
+		}
+	}
+	if strings.Contains(assigned, "/") {
+		parts := strings.Split(assigned, "/")
+		return row.AgentName != "" && parts[len(parts)-1] == row.AgentName
+	}
+	return false
 }
 
 func senderMatchesRow(sender string, row agentRow) bool {

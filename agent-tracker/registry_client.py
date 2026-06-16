@@ -20,7 +20,7 @@ PANE_OUTPUT_EVENT_DEDUPE_MAX = int(os.environ.get("AGENT_PANE_OUTPUT_EVENT_DEDUP
 _pane_output_event_dedupe = {}
 _pane_output_event_dedupe_lock = threading.Lock()
 MESSAGE_METADATA_FIELDS = (
-    "content_type", "approval_id", "task_id", "task_title", "task_status", "task_next_step",
+    "content_type", "approval_id", "task_id", "task_title", "task_status", "task_assigned_agent", "task_next_step",
     "result_summary", "task_chain_id", "root_task_id", "task_version_at_submission",
     "created_event_seq", "event_seq_at_submission", "source", "sender_source",
     "memory_id", "memory_type", "memory_title", "memory_scope", "memory_status",

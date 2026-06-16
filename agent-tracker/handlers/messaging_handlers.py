@@ -587,6 +587,7 @@ def handle_send_message(params: dict, caller_pid: int = None, identify_agent=Non
             "task_id",
             "task_title",
             "task_status",
+            "task_assigned_agent",
             "task_next_step",
             "result_summary",
             "task_chain_id",
