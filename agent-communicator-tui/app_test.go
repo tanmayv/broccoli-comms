@@ -686,6 +686,22 @@ func TestFilterConversationKeepsRemoteAssignedTaskUpdates(t *testing.T) {
 	}
 }
 
+func TestFilterConversationRejectsTaskUpdateRemoteLocalNameCollisions(t *testing.T) {
+	messages := []tracker.Message{
+		{Sender: "task-kernel", Body: "local alpha", Kind: "task_update", ContentType: taskUpdateContentType, TaskID: "task-local", TaskAssignedAgent: "alpha"},
+		{Sender: "task-kernel", Body: "host1 alpha", Kind: "task_update", ContentType: taskUpdateContentType, TaskID: "task-host1", TaskAssignedAgent: "host1/alpha"},
+		{Sender: "task-kernel", Body: "host2 alpha", Kind: "task_update", ContentType: taskUpdateContentType, TaskID: "task-host2", TaskAssignedAgent: "host2/alpha"},
+	}
+	remote := filterConversation(messages, agentRow{Name: "host2/alpha", Scope: "remote", Hostname: "host2", AgentName: "alpha", TargetAddress: "host2/alpha"})
+	if len(remote) != 1 || remote[0].TaskID != "task-host2" {
+		t.Fatalf("remote filtered = %+v", remote)
+	}
+	local := filterConversation(messages, agentRow{Name: "alpha", Scope: "local", AgentName: "alpha"})
+	if len(local) != 1 || local[0].TaskID != "task-local" {
+		t.Fatalf("local filtered = %+v", local)
+	}
+}
+
 func TestFilterConversationMatchesRemoteSenderFormat(t *testing.T) {
 	messages := []tracker.Message{{Sender: "zv2-bmod-agent (via tanmayvijay.c.googlers.com)", Body: "remote"}, {Sender: "other (via tanmayvijay.c.googlers.com)", Body: "other"}}
 	row := agentRow{Name: "tanma/zv2-bmod-agent", Scope: "remote", Hostname: "tanmayvijay.c.googlers.com", AgentName: "zv2-bmod-agent", TargetAddress: "tanmayvijay.c.googlers.com/zv2-bmod-agent"}

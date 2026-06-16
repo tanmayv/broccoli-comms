@@ -272,18 +272,19 @@ func taskUpdateMatchesRow(msg tracker.Message, row agentRow) bool {
 	if assigned == "" {
 		return false
 	}
-	rowNames := []string{row.Name, row.AgentName, rowTarget(row)}
-	if row.Scope == "remote" && row.Hostname != "" && row.AgentName != "" {
-		rowNames = append(rowNames, row.Hostname+"/"+row.AgentName)
+	if row.Scope == "remote" {
+		if !strings.Contains(assigned, "/") {
+			return false
+		}
+		return assigned == strings.TrimSpace(rowTarget(row)) || (row.Hostname != "" && row.AgentName != "" && assigned == row.Hostname+"/"+row.AgentName)
 	}
-	for _, name := range rowNames {
+	if strings.Contains(assigned, "/") {
+		return false
+	}
+	for _, name := range []string{row.Name, row.AgentName, rowTarget(row)} {
 		if strings.TrimSpace(name) == assigned {
 			return true
 		}
-	}
-	if strings.Contains(assigned, "/") {
-		parts := strings.Split(assigned, "/")
-		return row.AgentName != "" && parts[len(parts)-1] == row.AgentName
 	}
 	return false
 }
