@@ -59,6 +59,13 @@ let
   trackerStdout = "${broccoliCacheDir}/launchd.stdout.log";
   trackerStderr = "${broccoliCacheDir}/launchd.stderr.log";
   trackerHostSuffixPath = "${stateRoot}/broccoli-comms/agent-tracker/hostname-suffix";
+  cleanedTrackerRegistries = builtins.map
+    (registry: compactAttrs {
+      name = registry.name;
+      url = registry.url;
+      "token-file" = registry."token-file";
+    })
+    cfg.config.tracker.registries;
 
   configTomlAttrs = compactAttrs {
     paths = compactAttrs {
@@ -92,7 +99,7 @@ let
       pane_output_events_enabled = cfg.config.registry.paneOutputEventsEnabled;
       pane_output_event_ttl_seconds = cfg.config.registry.paneOutputEventTtlSeconds;
       remote_run_enabled = cfg.config.registry.remoteRunEnabled;
-      endpoints = cfg.config.tracker.registries;
+      endpoints = cleanedTrackerRegistries;
     };
     ui = compactAttrs {
       unseen_inbox_reminder_seconds = cfg.config.ui.unseenInboxReminderSeconds;
@@ -123,7 +130,7 @@ let
     providers = lib.mapAttrs (_: providerToml) cfg.config.providers;
   };
 
-  escapedRegistries = builtins.replaceStrings ["\""] ["\\\""] (builtins.toJSON cfg.config.tracker.registries);
+  escapedRegistries = builtins.replaceStrings ["\""] ["\\\""] (builtins.toJSON cleanedTrackerRegistries);
 
   envList = attrs: lib.mapAttrsToList (name: value: "${name}=\"${builtins.replaceStrings ["\""] ["\\\""] (toString value)}\"") attrs;
   optionalEnv = name: value: lib.optionalAttrs (value != null) { ${name} = value; };
@@ -150,7 +157,7 @@ let
     // optionalEnv "AGENT_TRACKER_TMUX_SOCKET" cfg.tracker.tmuxSocketPath
     // optionalEnv "AGENT_REGISTRY_TOKEN" (if cfg.tracker.registryToken != null then cfg.tracker.registryToken else cfg.config.registry.token)
     // lib.optionalAttrs (cfg.config.tracker.registries != []) {
-      AGENT_REGISTRIES_JSON = builtins.toJSON cfg.config.tracker.registries;
+      AGENT_REGISTRIES_JSON = builtins.toJSON cleanedTrackerRegistries;
     }
     // lib.optionalAttrs cfg.config.ui.remotePaneInputEnabled {
       BROCCOLI_COMMS_REMOTE_PANE_INPUT_ENABLED = "1";
@@ -209,7 +216,7 @@ PY
     name = "broccoli-comms";
     runtimeInputs = [ pcfg.package ];
     text = ''
-      ${lib.optionalString (cfg.tracker.registries != []) ''
+      ${lib.optionalString (cfg.config.tracker.registries != []) ''
         if [ -z "''${AGENT_REGISTRIES_JSON:-}" ]; then
           export AGENT_REGISTRIES_JSON="${escapedRegistries}"
         fi
