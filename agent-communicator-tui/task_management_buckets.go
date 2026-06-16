@@ -412,8 +412,16 @@ func chainSummaries(tasks []taskRecord, states []taskWorkingState, approvals []t
 		for _, task := range tasks {
 			for _, dep := range task.DependsOn {
 				if depChain := chainByTask[dep]; depChain != "" && chainByTask[task.TaskID] != depChain {
+					oldChain := chainByTask[task.TaskID]
 					chainByTask[task.TaskID] = depChain
 					rootByTask[task.TaskID] = firstNonEmpty(rootByTask[dep], dep)
+					if oldChain != "" {
+						for tid, c := range chainByTask {
+							if c == oldChain {
+								chainByTask[tid] = depChain
+							}
+						}
+					}
 					changed = true
 				}
 			}
