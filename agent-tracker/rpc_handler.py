@@ -23,6 +23,7 @@ from handlers import pane_capture
 from handlers import inbox_handlers
 from handlers import agent_handlers
 from handlers import messaging_handlers
+from handlers import memory_handlers
 
 BUFFER_SIZE = 4096
 PANE_OUTPUT_MAX_CHUNK_BYTES = int(os.environ.get("AGENT_PANE_OUTPUT_MAX_CHUNK_BYTES", "65536"))
@@ -1138,6 +1139,46 @@ def handle_list_trackers(params: dict) -> list[dict]:
     raise RuntimeError(f"Failed to list trackers from registry: status {status}")
 
 
+def handle_memory_propose(params: dict, caller_pid: int = None) -> dict:
+    return memory_handlers.handle_memory_propose(params, caller_pid, _identify_agent)
+
+def handle_memory_propose_edit(params: dict, caller_pid: int = None) -> dict:
+    return memory_handlers.handle_memory_propose_edit(params, caller_pid, _identify_agent)
+
+def handle_memory_propose_archive(params: dict, caller_pid: int = None) -> dict:
+    return memory_handlers.handle_memory_propose_archive(params, caller_pid, _identify_agent)
+
+def handle_memory_approve(params: dict, caller_pid: int = None) -> dict:
+    return memory_handlers.handle_memory_approve(params, caller_pid, _identify_agent)
+
+def handle_memory_reject(params: dict, caller_pid: int = None) -> dict:
+    return memory_handlers.handle_memory_reject(params, caller_pid, _identify_agent)
+
+def handle_memory_show(params: dict) -> dict:
+    return memory_handlers.handle_memory_show(params)
+
+def handle_memory_history(params: dict) -> dict:
+    return memory_handlers.handle_memory_history(params)
+
+def handle_memory_list(params: dict) -> list[dict]:
+    return memory_handlers.handle_memory_list(params)
+
+def handle_memory_search(params: dict) -> list[dict]:
+    return memory_handlers.handle_memory_search(params)
+
+def handle_memory_edit(params: dict, caller_pid: int = None) -> dict:
+    return memory_handlers.handle_memory_edit(params, caller_pid, _identify_agent)
+
+def handle_memory_rollback(params: dict, caller_pid: int = None) -> dict:
+    return memory_handlers.handle_memory_rollback(params, caller_pid, _identify_agent)
+
+def handle_memory_revoke(params: dict, caller_pid: int = None) -> dict:
+    return memory_handlers.handle_memory_revoke(params, caller_pid, _identify_agent)
+
+def handle_memory_budget(params: dict) -> dict:
+    return memory_handlers.handle_memory_budget(params)
+
+
 dispatcher = {
     "register": handle_register,
     "ensure_mailbox": handle_ensure_mailbox,
@@ -1168,6 +1209,19 @@ dispatcher = {
     "enable_pane_output": handle_enable_pane_output,
     "disable_pane_output": handle_disable_pane_output,
     "pane_output_status": handle_pane_output_status,
+    "memory.propose": handle_memory_propose,
+    "memory.propose_edit": handle_memory_propose_edit,
+    "memory.propose_archive": handle_memory_propose_archive,
+    "memory.approve": handle_memory_approve,
+    "memory.reject": handle_memory_reject,
+    "memory.show": handle_memory_show,
+    "memory.history": handle_memory_history,
+    "memory.list": handle_memory_list,
+    "memory.search": handle_memory_search,
+    "memory.edit": handle_memory_edit,
+    "memory.rollback": handle_memory_rollback,
+    "memory.revoke": handle_memory_revoke,
+    "memory.budget": handle_memory_budget,
 }
 
 def handle_client(conn: socket.socket) -> None:
@@ -1211,7 +1265,9 @@ def handle_client(conn: socket.socket) -> None:
         if handler:
             try:
                 # Pass caller_pid to handlers that might need it
-                if method in ["get_inbox", "update_agent", "heartbeat", "send_message", "send_input", "wait_events", "whoami", "list", "rename", "unregister", "spin_agent", "capture_pane"]:
+                if method in ["get_inbox", "update_agent", "heartbeat", "send_message", "send_input", "wait_events", "whoami", "list", "rename", "unregister", "spin_agent", "capture_pane",
+                              "memory.propose", "memory.propose_edit", "memory.propose_archive", "memory.approve", "memory.reject",
+                              "memory.edit", "memory.rollback", "memory.revoke"]:
                     result = handler(params, caller_pid=caller_pid)
                 else:
                     result = handler(params)

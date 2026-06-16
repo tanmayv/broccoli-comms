@@ -641,7 +641,7 @@ func (m model) handleComposerSubmit() (model, tea.Cmd) {
 				return m, nil
 			}
 			m.composer = nil
-			return m, memoryActionCmd(memoryMessageForAction(memoryID, selected), action.Result, action.Title, action.Body)
+			return m, memoryActionCmd(m.local, memoryMessageForAction(memoryID, selected), action.Result, action.Title, action.Body)
 		}
 		if action.Kind == "approval_review" {
 			if action.Result == "" {

@@ -263,3 +263,31 @@ type RemoteTracker struct {
 	Status       string        `json:"status"`
 	AgentConfigs []AgentConfig `json:"agent_configs"`
 }
+
+type MemoryRecord struct {
+	MemoryID     string   `json:"memory_id"`
+	Status       string   `json:"status"`
+	Version      int      `json:"version"`
+	Type         string   `json:"type"`
+	Scope        string   `json:"scope"`
+	SubjectAgent string   `json:"subject_agent,omitempty"`
+	ProposedBy   string   `json:"proposed_by,omitempty"`
+	SourceTaskID string   `json:"source_task_id,omitempty"`
+	Title        string   `json:"title"`
+	Body         string   `json:"body"`
+	Tags         []string `json:"tags,omitempty"`
+	Metadata     any      `json:"metadata,omitempty"`
+}
+
+type MemoryResult struct {
+	Memory     MemoryRecord `json:"memory"`
+	Event      any          `json:"event,omitempty"`
+	Idempotent bool         `json:"idempotent,omitempty"`
+}
+
+type MemoryBudgetResult struct {
+	Agent   string         `json:"agent"`
+	Limits  map[string]any `json:"limits"`
+	Active  map[string]int `json:"active"`
+	Pending int            `json:"pending"`
+}

@@ -15,6 +15,7 @@ import (
 )
 
 type fakeLocal struct {
+	localClient
 	agents                map[string]tracker.Agent
 	inbox                 []tracker.Message
 	lastLimit             int

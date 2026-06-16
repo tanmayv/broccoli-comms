@@ -2,11 +2,9 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 	"time"
 
@@ -23,47 +21,54 @@ type memoryEditClosed struct {
 	Err      error
 }
 
-func loadMemoryApprovalsCmd() tea.Cmd {
+func loadMemoryApprovalsCmd(local localClient) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		out, err := runApprovalCLI(ctx, "memory", "approvals", "--json")
+
+		pending, err := local.MemoryList(ctx, map[string]any{"status": "pending"})
 		if err != nil {
-			return memoryApprovalsLoaded{Err: fmt.Errorf("memory approvals failed: %w: %s", err, string(out))}
+			return memoryApprovalsLoaded{Err: fmt.Errorf("failed to load pending memories: %w", err)}
 		}
-		var payload struct {
-			Pending  []memoryRecord `json:"pending"`
-			Approved []memoryRecord `json:"approved"`
+
+		approved, err := local.MemoryList(ctx, map[string]any{"status": "active"})
+		if err != nil {
+			return memoryApprovalsLoaded{Err: fmt.Errorf("failed to load active memories: %w", err)}
 		}
-		if err := json.Unmarshal(out, &payload); err != nil {
-			return memoryApprovalsLoaded{Err: fmt.Errorf("memory approvals returned invalid JSON: %w", err)}
-		}
-		items := append([]memoryRecord{}, payload.Pending...)
-		items = append(items, payload.Approved...)
+
+		items := append([]memoryRecord{}, toLocalMemoryRecords(pending)...)
+		items = append(items, toLocalMemoryRecords(approved)...)
 		return memoryApprovalsLoaded{Items: items}
 	}
 }
 
-func memoryManagerActionCmd(mem memoryRecord, action string) tea.Cmd {
+func memoryManagerActionCmd(local localClient, mem memoryRecord, action string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if mem.MemoryID == "" {
 			return memoryActionResult{Action: action, Err: fmt.Errorf("memory id is required")}
 		}
-		args := []string{"memory", action, mem.MemoryID, "--expected-version", strconv.Itoa(mem.Version), "--json"}
-		if action == "reject" || action == "revoke" {
-			args = append(args, "--reason", "removed from Memory Management tab")
-		}
-		if action == "rollback" {
+
+		var errAct error
+		switch action {
+		case "approve":
+			_, errAct = local.MemoryApprove(ctx, mem.MemoryID, mem.Version, "")
+		case "reject":
+			_, errAct = local.MemoryReject(ctx, mem.MemoryID, mem.Version, "removed from Memory Management tab", "")
+		case "revoke":
+			_, errAct = local.MemoryRevoke(ctx, mem.MemoryID, "removed from Memory Management tab", mem.Version, "")
+		case "rollback":
 			if mem.Version <= 1 {
 				return memoryActionResult{MemoryID: mem.MemoryID, Action: action, Err: fmt.Errorf("memory has no previous version")}
 			}
-			args = []string{"memory", "rollback", mem.MemoryID, "--to-version", strconv.Itoa(mem.Version - 1), "--expected-version", strconv.Itoa(mem.Version), "--json"}
+			_, errAct = local.MemoryRollback(ctx, mem.MemoryID, mem.Version-1, mem.Version, "")
+		default:
+			errAct = fmt.Errorf("unknown memory action: %s", action)
 		}
-		out, err := runApprovalCLI(ctx, args...)
-		if err != nil {
-			return memoryActionResult{MemoryID: mem.MemoryID, Action: action, Err: fmt.Errorf("memory %s failed: %w: %s", action, err, string(out))}
+
+		if errAct != nil {
+			return memoryActionResult{MemoryID: mem.MemoryID, Action: action, Err: fmt.Errorf("memory %s failed: %w", action, errAct)}
 		}
 		return memoryActionResult{MemoryID: mem.MemoryID, Action: action}
 	}
@@ -76,7 +81,7 @@ func memoryEditorCommandName() string {
 	return "nvim"
 }
 
-func editMemoryInEditor(mem memoryRecord) tea.Cmd {
+func editMemoryInEditor(local localClient, mem memoryRecord) tea.Cmd {
 	return func() tea.Msg {
 		file, err := os.CreateTemp("", "broccoli-memory-*.md")
 		if err != nil {
@@ -108,9 +113,16 @@ func editMemoryInEditor(mem memoryRecord) tea.Cmd {
 			body := strings.TrimSpace(parts[1])
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			out, err := runApprovalCLI(ctx, "memory", "edit", mem.MemoryID, "--title", title, "--body", body, "--expected-version", strconv.Itoa(mem.Version), "--json")
-			if err != nil {
-				return memoryEditClosed{MemoryID: mem.MemoryID, Err: fmt.Errorf("memory edit failed: %w: %s", err, string(out))}
+
+			params := map[string]any{
+				"memory_id":        mem.MemoryID,
+				"expected_version": mem.Version,
+				"title":            title,
+				"body":             body,
+			}
+			_, errAct := local.MemoryEdit(ctx, params)
+			if errAct != nil {
+				return memoryEditClosed{MemoryID: mem.MemoryID, Err: fmt.Errorf("memory edit failed: %w", errAct)}
 			}
 			return memoryEditClosed{MemoryID: mem.MemoryID}
 		})()

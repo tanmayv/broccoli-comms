@@ -386,3 +386,102 @@ func (c *Client) AssignSwarm(ctx context.Context, swarmName, main string, subage
 	err := c.call(ctx, "assign_live_swarm", params, 10*time.Second, &result)
 	return result, err
 }
+
+func (c *Client) MemoryShow(ctx context.Context, memoryID string, version int) (MemoryRecord, error) {
+	params := map[string]any{"memory_id": memoryID}
+	if version > 0 {
+		params["version"] = version
+	}
+	var result MemoryRecord
+	err := c.call(ctx, "memory.show", params, 5*time.Second, &result)
+	return result, err
+}
+
+func (c *Client) MemoryList(ctx context.Context, params map[string]any) ([]MemoryRecord, error) {
+	var result []MemoryRecord
+	err := c.call(ctx, "memory.list", params, 5*time.Second, &result)
+	return result, err
+}
+
+func (c *Client) MemoryPropose(ctx context.Context, params map[string]any) (MemoryResult, error) {
+	var result MemoryResult
+	err := c.call(ctx, "memory.propose", params, 5*time.Second, &result)
+	return result, err
+}
+
+func (c *Client) MemoryProposeEdit(ctx context.Context, params map[string]any) (MemoryResult, error) {
+	var result MemoryResult
+	err := c.call(ctx, "memory.propose_edit", params, 5*time.Second, &result)
+	return result, err
+}
+
+func (c *Client) MemoryProposeArchive(ctx context.Context, params map[string]any) (MemoryResult, error) {
+	var result MemoryResult
+	err := c.call(ctx, "memory.propose_archive", params, 5*time.Second, &result)
+	return result, err
+}
+
+func (c *Client) MemoryApprove(ctx context.Context, memoryID string, version int, actor string) (MemoryResult, error) {
+	params := map[string]any{
+		"memory_id": memoryID,
+		"version":   version,
+	}
+	if actor != "" {
+		params["actor"] = actor
+	}
+	var result MemoryResult
+	err := c.call(ctx, "memory.approve", params, 5*time.Second, &result)
+	return result, err
+}
+
+func (c *Client) MemoryReject(ctx context.Context, memoryID string, version int, reason string, actor string) (MemoryResult, error) {
+	params := map[string]any{
+		"memory_id": memoryID,
+		"version":   version,
+	}
+	if reason != "" {
+		params["reason"] = reason
+	}
+	if actor != "" {
+		params["actor"] = actor
+	}
+	var result MemoryResult
+	err := c.call(ctx, "memory.reject", params, 5*time.Second, &result)
+	return result, err
+}
+
+func (c *Client) MemoryEdit(ctx context.Context, params map[string]any) (MemoryResult, error) {
+	var result MemoryResult
+	err := c.call(ctx, "memory.edit", params, 5*time.Second, &result)
+	return result, err
+}
+
+func (c *Client) MemoryRollback(ctx context.Context, memoryID string, targetVersion, expectedVersion int, actor string) (MemoryResult, error) {
+	params := map[string]any{
+		"memory_id":        memoryID,
+		"target_version":   targetVersion,
+		"expected_version": expectedVersion,
+	}
+	if actor != "" {
+		params["actor"] = actor
+	}
+	var result MemoryResult
+	err := c.call(ctx, "memory.rollback", params, 5*time.Second, &result)
+	return result, err
+}
+
+func (c *Client) MemoryRevoke(ctx context.Context, memoryID string, reason string, expectedVersion int, actor string) (MemoryResult, error) {
+	params := map[string]any{
+		"memory_id":        memoryID,
+		"expected_version": expectedVersion,
+	}
+	if reason != "" {
+		params["reason"] = reason
+	}
+	if actor != "" {
+		params["actor"] = actor
+	}
+	var result MemoryResult
+	err := c.call(ctx, "memory.revoke", params, 5*time.Second, &result)
+	return result, err
+}

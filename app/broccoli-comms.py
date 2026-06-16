@@ -303,6 +303,43 @@ def tracker_rpc(method: str, params: dict | None = None, timeout: float = 2.0) -
                 pass
 
 
+def memory_rpc(method: str, params: dict | None = None) -> object:
+    """Sends a JSON-RPC request to the tracker daemon specifically for memory operations.
+    
+    Raises ValueError on RPC errors or connection failures so they are caught
+    by the existing CLI handlers and printed cleanly.
+    """
+    sock_path = paths()["tracker_socket"]
+    try:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(5.0)
+        s.connect(str(sock_path))
+        
+        req = {
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params or {},
+            "id": 1
+        }
+        s.sendall(json.dumps(req).encode("utf-8"))
+        s.shutdown(socket.SHUT_WR)
+        
+        resp_bytes = b""
+        while True:
+            chunk = s.recv(4096)
+            if not chunk:
+                break
+            resp_bytes += chunk
+            
+        resp = json.loads(resp_bytes.decode("utf-8"))
+        if "error" in resp:
+            err = resp["error"]
+            raise ValueError(err.get("message") or "Unknown RPC error")
+        return resp.get("result")
+    except OSError as e:
+        raise ValueError(f"Failed to connect to agent-tracker daemon at {sock_path}. Is the daemon running? (Error: {e})")
+
+
 def tracker_script() -> str:
     return os.environ.get("BROCCOLI_COMMS_AGENT_TRACKER") or str(repo_root() / "agent-tracker" / "agent-tracker.py")
 
@@ -3338,17 +3375,8 @@ def verified_memory_runtime_identity() -> dict:
 
 
 def trusted_memory_actor_from_runtime() -> str:
-    configured = get_toml_config("learning", "trusted_memory_actors", []) or []
-    trusted = {str(item) for item in configured if isinstance(item, str)} if isinstance(configured, list) else set()
     ident = verified_memory_runtime_identity()
-    if ident["registered"]:
-        name = ident["name"]
-        if name in trusted:
-            return name
-        raise SystemExit("trusted memory actor required")
-    # Only a process that is not identified by tracker peer-credential/process-tree
-    # metadata is treated as the local human/coordinator path.
-    return "user"
+    return ident["name"]
 
 
 def memory_proposal_fallback_markdown(mem: dict) -> str:
@@ -3404,45 +3432,45 @@ def memory_propose(args: argparse.Namespace) -> None:
         memory_id = getattr(args, "memory_id", None)
         metadata = json.loads(args.metadata_json) if args.metadata_json else {}
         if memory_id and getattr(args, "archive", False):
-            payload = learning_kernel().memory.propose_archive(
-                memory_id,
-                expected_version=args.expected_version,
-                reason=getattr(args, "reason", None),
-                source_task_id=args.source_task,
-                proposed_by=agent,
-                proposed_by_instance=instance,
-                non_learning=immutable_learning_instance(agent, instance),
-            )
+            payload = memory_rpc("memory.propose_archive", {
+                "memory_id": memory_id,
+                "expected_version": args.expected_version,
+                "reason": getattr(args, "reason", None),
+                "source_task_id": args.source_task,
+                "proposed_by": agent,
+                "proposed_by_instance": instance,
+                "non_learning": immutable_learning_instance(agent, instance),
+            })
         elif memory_id:
-            payload = learning_kernel().memory.propose_edit(
-                memory_id,
-                expected_version=args.expected_version,
-                proposed_by=agent,
-                proposed_by_instance=instance,
-                type=args.type,
-                scope=args.scope,
-                subject_agent=args.subject_agent,
-                title=args.title,
-                description=getattr(args, "description", None),
-                body=args.body,
-                source_task_id=args.source_task,
-                tags=args.tag,
-                metadata=metadata,
-                non_learning=immutable_learning_instance(agent, instance),
-            )
+            payload = memory_rpc("memory.propose_edit", {
+                "memory_id": memory_id,
+                "expected_version": args.expected_version,
+                "proposed_by": agent,
+                "proposed_by_instance": instance,
+                "type": args.type,
+                "scope": args.scope,
+                "subject_agent": args.subject_agent,
+                "title": args.title,
+                "description": getattr(args, "description", None),
+                "body": args.body,
+                "source_task_id": args.source_task,
+                "tags": args.tag,
+                "metadata": metadata,
+                "non_learning": immutable_learning_instance(agent, instance),
+            })
         else:
             trusted_actor = trusted_memory_actor_from_runtime() if args.trusted_manual else None
             if args.trusted_manual:
                 ident = verified_memory_runtime_identity()
                 agent = trusted_actor
                 instance = ident["instance"] if ident["registered"] else None
-            payload = learning_kernel().memory.propose(
-                type=args.type, scope=args.scope, subject_agent=args.subject_agent, title=args.title,
-                description=getattr(args, "description", None), body=args.body,
-                source_task_id=args.source_task, trusted_manual=args.trusted_manual, tags=args.tag, metadata=metadata,
-                idempotency_key=args.idempotency_key, proposed_by=agent, proposed_by_instance=instance,
-                trusted_actor=trusted_actor, non_learning=immutable_learning_instance(agent, instance),
-            )
+            payload = memory_rpc("memory.propose", {
+                "type": args.type, "scope": args.scope, "subject_agent": args.subject_agent, "title": args.title,
+                "description": getattr(args, "description", None), "body": args.body,
+                "source_task_id": args.source_task, "trusted_manual": args.trusted_manual, "tags": args.tag, "metadata": metadata,
+                "idempotency_key": args.idempotency_key, "proposed_by": agent, "proposed_by_instance": instance,
+                "trusted_actor": trusted_actor, "non_learning": immutable_learning_instance(agent, instance),
+            })
         if not payload.get("idempotent"):
             payload["notification"] = notify_memory_proposal(payload["memory"])
     except (KeyError, ValueError, json.JSONDecodeError) as e:
@@ -3454,22 +3482,22 @@ def memory_propose_edit(args: argparse.Namespace) -> None:
     try:
         agent, instance = unverified_memory_proposer(args)
         metadata = json.loads(args.metadata_json) if args.metadata_json else {}
-        payload = learning_kernel().memory.propose_edit(
-            args.memory_id,
-            expected_version=args.expected_version,
-            proposed_by=agent,
-            proposed_by_instance=instance,
-            type=args.type,
-            scope=args.scope,
-            subject_agent=args.subject_agent,
-            title=args.title,
-            description=getattr(args, "description", None),
-            body=args.body,
-            source_task_id=args.source_task,
-            tags=args.tag,
-            metadata=metadata,
-            non_learning=immutable_learning_instance(agent, instance),
-        )
+        payload = memory_rpc("memory.propose_edit", {
+            "memory_id": args.memory_id,
+            "expected_version": args.expected_version,
+            "proposed_by": agent,
+            "proposed_by_instance": instance,
+            "type": args.type,
+            "scope": args.scope,
+            "subject_agent": args.subject_agent,
+            "title": args.title,
+            "description": getattr(args, "description", None),
+            "body": args.body,
+            "source_task_id": args.source_task,
+            "tags": args.tag,
+            "metadata": metadata,
+            "non_learning": immutable_learning_instance(agent, instance),
+        })
         if not payload.get("idempotent"):
             payload["notification"] = notify_memory_proposal(payload["memory"])
     except (KeyError, ValueError, json.JSONDecodeError) as e:
@@ -3479,7 +3507,11 @@ def memory_propose_edit(args: argparse.Namespace) -> None:
 
 def memory_approve(args: argparse.Namespace) -> None:
     try:
-        payload = learning_kernel().memory.approve(args.memory_id, expected_version=args.expected_version, actor=trusted_memory_actor_from_runtime())
+        payload = memory_rpc("memory.approve", {
+            "memory_id": args.memory_id,
+            "version": args.version,
+            "actor": trusted_memory_actor_from_runtime()
+        })
     except (KeyError, ValueError) as e:
         raise SystemExit(str(e))
     _print_payload(payload, args.json)
@@ -3489,9 +3521,18 @@ def memory_decide(args: argparse.Namespace) -> None:
     try:
         actor = trusted_memory_actor_from_runtime()
         if args.decision == "approve":
-            payload = learning_kernel().memory.approve(args.memory_id, expected_version=args.expected_version, actor=actor)
+            payload = memory_rpc("memory.approve", {
+                "memory_id": args.memory_id,
+                "version": args.version,
+                "actor": actor
+            })
         elif args.decision == "reject":
-            payload = learning_kernel().memory.reject(args.memory_id, reason=args.reason, expected_version=args.expected_version, actor=actor)
+            payload = memory_rpc("memory.reject", {
+                "memory_id": args.memory_id,
+                "version": args.version,
+                "reason": args.reason,
+                "actor": actor
+            })
         else:
             raise ValueError("decision must be approve or reject")
     except (KeyError, ValueError) as e:
@@ -3502,21 +3543,21 @@ def memory_decide(args: argparse.Namespace) -> None:
 def memory_edit(args: argparse.Namespace) -> None:
     try:
         metadata = json.loads(args.metadata_json) if args.metadata_json else None
-        payload = learning_kernel().memory.edit(
-            args.memory_id,
-            expected_version=args.expected_version,
-            actor=trusted_memory_actor_from_runtime(),
-            type=args.type,
-            scope=args.scope,
-            subject_agent=args.subject_agent,
-            title=args.title,
-            description=getattr(args, "description", None),
-            body=args.body,
-            source_task_id=args.source_task,
-            trusted_manual=args.trusted_manual,
-            tags=args.tag,
-            metadata=metadata,
-        )
+        payload = memory_rpc("memory.edit", {
+            "memory_id": args.memory_id,
+            "expected_version": args.expected_version,
+            "actor": trusted_memory_actor_from_runtime(),
+            "type": args.type,
+            "scope": args.scope,
+            "subject_agent": args.subject_agent,
+            "title": args.title,
+            "description": getattr(args, "description", None),
+            "body": args.body,
+            "source_task_id": args.source_task,
+            "trusted_manual": args.trusted_manual,
+            "tags": args.tag,
+            "metadata": metadata,
+        })
     except (KeyError, ValueError, json.JSONDecodeError) as e:
         raise SystemExit(str(e))
     _print_payload(payload, args.json)
@@ -3524,7 +3565,12 @@ def memory_edit(args: argparse.Namespace) -> None:
 
 def memory_rollback(args: argparse.Namespace) -> None:
     try:
-        payload = learning_kernel().memory.rollback(args.memory_id, target_version=args.to_version, expected_version=args.expected_version, actor=trusted_memory_actor_from_runtime())
+        payload = memory_rpc("memory.rollback", {
+            "memory_id": args.memory_id,
+            "target_version": args.to_version,
+            "expected_version": args.expected_version,
+            "actor": trusted_memory_actor_from_runtime()
+        })
     except (KeyError, ValueError) as e:
         raise SystemExit(str(e))
     _print_payload(payload, args.json)
@@ -3532,7 +3578,12 @@ def memory_rollback(args: argparse.Namespace) -> None:
 
 def memory_reject(args: argparse.Namespace) -> None:
     try:
-        payload = learning_kernel().memory.reject(args.memory_id, reason=args.reason, expected_version=args.expected_version, actor=trusted_memory_actor_from_runtime())
+        payload = memory_rpc("memory.reject", {
+            "memory_id": args.memory_id,
+            "version": args.version,
+            "reason": args.reason,
+            "actor": trusted_memory_actor_from_runtime()
+        })
     except (KeyError, ValueError) as e:
         raise SystemExit(str(e))
     _print_payload(payload, args.json)
@@ -3540,46 +3591,91 @@ def memory_reject(args: argparse.Namespace) -> None:
 
 def memory_revoke(args: argparse.Namespace) -> None:
     try:
-        payload = learning_kernel().memory.revoke(args.memory_id, reason=args.reason, expected_version=args.expected_version, actor=trusted_memory_actor_from_runtime())
+        payload = memory_rpc("memory.revoke", {
+            "memory_id": args.memory_id,
+            "reason": args.reason,
+            "expected_version": args.expected_version,
+            "actor": trusted_memory_actor_from_runtime()
+        })
     except (KeyError, ValueError) as e:
         raise SystemExit(str(e))
     _print_payload(payload, args.json)
 
 
 def memory_list(args: argparse.Namespace) -> None:
-    _print_payload(learning_kernel().memory.list(scope=args.scope, type=args.type, status=args.status, agent=args.agent), True)
+    try:
+        payload = memory_rpc("memory.list", {
+            "scope": args.scope,
+            "type": args.type,
+            "status": args.status,
+            "agent": args.agent
+        })
+        _print_payload(payload, True)
+    except (KeyError, ValueError) as e:
+        raise SystemExit(str(e))
 
 
 def memory_approvals(args: argparse.Namespace) -> None:
-    memory = learning_kernel().memory
-    pending = memory.list(scope=args.scope, type=args.type, status="pending", agent=args.agent)
-    approved = memory.list(scope=args.scope, type=args.type, status="active", agent=args.agent)
-    _print_payload({"pending": pending, "approved": approved}, True)
+    try:
+        pending = memory_rpc("memory.list", {
+            "scope": args.scope,
+            "type": args.type,
+            "status": "pending",
+            "agent": args.agent
+        })
+        approved = memory_rpc("memory.list", {
+            "scope": args.scope,
+            "type": args.type,
+            "status": "active",
+            "agent": args.agent
+        })
+        _print_payload({"pending": pending, "approved": approved}, True)
+    except (KeyError, ValueError) as e:
+        raise SystemExit(str(e))
 
 
 def memory_search(args: argparse.Namespace) -> None:
-    _print_payload(learning_kernel().memory.search(args.query, scope=args.scope), True)
+    try:
+        payload = memory_rpc("memory.search", {
+            "query": args.query,
+            "scope": args.scope
+        })
+        _print_payload(payload, True)
+    except (KeyError, ValueError) as e:
+        raise SystemExit(str(e))
 
 
 def memory_show(args: argparse.Namespace) -> None:
     try:
-        payload = learning_kernel().memory.show(args.memory_id)
-    except KeyError:
-        raise SystemExit(f"memory not found: {args.memory_id}")
+        payload = memory_rpc("memory.show", {
+            "memory_id": args.memory_id,
+            "version": args.version
+        })
+    except ValueError as e:
+        raise SystemExit(str(e))
     _print_payload(payload, True)
 
 
 def memory_history(args: argparse.Namespace) -> None:
     try:
-        payload = learning_kernel().memory.history(args.memory_id)
-    except KeyError:
-        raise SystemExit(f"memory not found: {args.memory_id}")
+        payload = memory_rpc("memory.history", {
+            "memory_id": args.memory_id
+        })
+    except ValueError as e:
+        raise SystemExit(str(e))
     _print_payload(payload, True)
 
 
 def memory_budget(args: argparse.Namespace) -> None:
-    agent = args.agent or os.environ.get("AGENT_NAME") or "user"
-    _print_payload(learning_kernel().memory.budget(agent=agent, scope=args.scope), True)
+    try:
+        agent = args.agent or os.environ.get("AGENT_NAME") or "user"
+        payload = memory_rpc("memory.budget", {
+            "agent": agent,
+            "scope": args.scope
+        })
+        _print_payload(payload, True)
+    except (KeyError, ValueError) as e:
+        raise SystemExit(str(e))
 
 
 def _parse_discoveries(values: list[str] | None) -> list[dict[str, str]]:
@@ -4045,14 +4141,14 @@ def main() -> None:
     memory_propose_edit_parser.set_defaults(func=memory_propose_edit)
     memory_approve_parser = memory_sub.add_parser("approve", help="Legacy alias: approve a pending memory proposal as a trusted actor")
     memory_approve_parser.add_argument("memory_id", help="Pending proposal id to approve")
-    memory_approve_parser.add_argument("--expected-version", type=int, help="Expected current proposal version")
+    memory_approve_parser.add_argument("version", type=int, help="Specific version to approve")
     memory_approve_parser.add_argument("--json", action="store_true")
     memory_approve_parser.set_defaults(func=memory_approve)
     memory_decide_parser = memory_sub.add_parser("decide", help="Approve or reject a pending proposal as a trusted actor")
     memory_decide_parser.add_argument("memory_id", help="Pending proposal id to decide")
     memory_decide_parser.add_argument("decision", choices=["approve", "reject"], help="Decision to apply to the pending proposal")
+    memory_decide_parser.add_argument("version", type=int, help="Specific version to decide")
     memory_decide_parser.add_argument("--reason", help="Reason for rejecting the proposal")
-    memory_decide_parser.add_argument("--expected-version", type=int, help="Expected current proposal version")
     memory_decide_parser.add_argument("--json", action="store_true")
     memory_decide_parser.set_defaults(func=memory_decide)
     memory_edit_parser = memory_sub.add_parser("edit", help="Directly edit pending/active memory as a trusted actor; agents should usually use memory propose <id>")
@@ -4078,8 +4174,8 @@ def main() -> None:
     memory_rollback_parser.set_defaults(func=memory_rollback)
     memory_reject_parser = memory_sub.add_parser("reject", help="Legacy alias: reject a pending memory proposal as a trusted actor")
     memory_reject_parser.add_argument("memory_id", help="Pending proposal id to reject")
+    memory_reject_parser.add_argument("version", type=int, help="Specific version to reject")
     memory_reject_parser.add_argument("--reason", help="Reason for rejection")
-    memory_reject_parser.add_argument("--expected-version", type=int)
     memory_reject_parser.add_argument("--json", action="store_true")
     memory_reject_parser.set_defaults(func=memory_reject)
     memory_revoke_parser = memory_sub.add_parser("revoke", help="Directly revoke an active memory as a trusted actor; agents should usually use memory propose <id> --archive")
@@ -4108,6 +4204,7 @@ def main() -> None:
     memory_search_parser.set_defaults(func=memory_search)
     memory_show_parser = memory_sub.add_parser("show", help="Show one memory record")
     memory_show_parser.add_argument("memory_id", help="Memory id to show")
+    memory_show_parser.add_argument("--version", type=int, help="Specific version to show")
     memory_show_parser.add_argument("--json", action="store_true")
     memory_show_parser.set_defaults(func=memory_show)
     memory_history_parser = memory_sub.add_parser("history", help="Show memory version/event history")

@@ -2,11 +2,10 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"reflect"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/tanmayvijay/home-manager-core/agent-communicator-tui/internal/tracker"
 )
 
 func TestCommandPaletteOpensMemoryManagementTab(t *testing.T) {
@@ -34,27 +33,36 @@ func TestMemoryEditorCommandDefaultsToNvimAndHonorsEditor(t *testing.T) {
 	}
 }
 
-func TestLoadMemoryApprovalsUsesApprovalsBackend(t *testing.T) {
-	old := runApprovalCLI
-	defer func() { runApprovalCLI = old }()
-	var calls [][]string
-	runApprovalCLI = func(_ context.Context, args ...string) ([]byte, error) {
-		calls = append(calls, args)
-		return json.Marshal(map[string]any{
-			"pending":  []memoryRecord{{MemoryID: "mem-p", Status: "pending", Version: 1}},
-			"approved": []memoryRecord{{MemoryID: "mem-a", Status: "active", Version: 2}},
-		})
+type mockMemoryListClient struct {
+	localClient
+	calls []map[string]any
+}
+
+func (m *mockMemoryListClient) MemoryList(ctx context.Context, params map[string]any) ([]tracker.MemoryRecord, error) {
+	m.calls = append(m.calls, params)
+	if params["status"] == "pending" {
+		return []tracker.MemoryRecord{{MemoryID: "mem-p", Status: "pending", Version: 1}}, nil
 	}
-	msg := loadMemoryApprovalsCmd()().(memoryApprovalsLoaded)
+	if params["status"] == "active" {
+		return []tracker.MemoryRecord{{MemoryID: "mem-a", Status: "active", Version: 2}}, nil
+	}
+	return nil, nil
+}
+
+func TestLoadMemoryApprovalsUsesApprovalsBackend(t *testing.T) {
+	mock := &mockMemoryListClient{}
+	msg := loadMemoryApprovalsCmd(mock)().(memoryApprovalsLoaded)
 	if msg.Err != nil {
 		t.Fatalf("loadMemoryApprovalsCmd error: %v", msg.Err)
 	}
 	if len(msg.Items) != 2 || msg.Items[0].MemoryID != "mem-p" || msg.Items[1].MemoryID != "mem-a" {
 		t.Fatalf("loaded items = %#v", msg.Items)
 	}
-	want := []string{"memory", "approvals", "--json"}
-	if len(calls) != 1 || !reflect.DeepEqual(calls[0], want) {
-		t.Fatalf("load args = %#v, want %#v", calls, want)
+	if len(mock.calls) != 2 {
+		t.Fatalf("expected 2 calls, got %d", len(mock.calls))
+	}
+	if mock.calls[0]["status"] != "pending" || mock.calls[1]["status"] != "active" {
+		t.Fatalf("call params = %#v", mock.calls)
 	}
 }
 

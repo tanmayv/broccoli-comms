@@ -813,7 +813,7 @@ class TestLearningKernelCli(unittest.TestCase):
             task = k.task_create(title="memory service", assigned_agent="a", scope="project:x")
             k.mark_result(task["task_id"], "good")
             proposed = k.memory.propose(type="fact", scope="project:x", subject_agent="a", title="Endpoint", body="Use /latest", source_task_id=task["task_id"], proposed_by="a")
-            active = k.memory.approve(proposed["memory"]["memory_id"], expected_version=proposed["memory"]["version"])
+            active = k.memory.approve(proposed["memory"]["memory_id"], proposed["memory"]["version"])
             self.assertEqual(active["memory"]["status"], "active")
             self.assertEqual(k.memory.show(active["memory"]["memory_id"])["memory_id"], active["memory"]["memory_id"])
             self.assertEqual(k.memory_list(status="active")[0]["memory_id"], active["memory"]["memory_id"])
@@ -825,21 +825,22 @@ class TestLearningKernelCli(unittest.TestCase):
             task = k.task_create(title="validated", assigned_agent="a")
             k.mark_result(task["task_id"], "good")
             proposed = k.memory_propose(type="habit", scope="global", subject_agent="a", title="Old", body="old", source_task_id=task["task_id"], proposed_by="a")
-            active = k.memory_approve(proposed["memory"]["memory_id"], expected_version=proposed["memory"]["version"])
+            active = k.memory_approve(proposed["memory"]["memory_id"], proposed["memory"]["version"])
 
             edit = k.memory_propose_edit(active["memory"]["memory_id"], expected_version=active["memory"]["version"], body="new", proposed_by="a", source_task_id=task["task_id"], metadata={"user_key": "keep"})
-            self.assertEqual(edit["memory"]["status"], "pending")
-            self.assertEqual(edit["memory"]["metadata"]["proposal_kind"], "edit")
-            self.assertEqual(edit["memory"]["metadata"]["target_memory_id"], active["memory"]["memory_id"])
+            self.assertEqual(edit["memory"]["status"], "pending_edit")
+            self.assertEqual(edit["memory"]["memory_id"], active["memory"]["memory_id"])
+            self.assertEqual(edit["memory"]["version"], active["memory"]["version"] + 1)
 
-            approved = k.memory_approve(edit["memory"]["memory_id"], expected_version=edit["memory"]["version"])
+            approved = k.memory_approve(edit["memory"]["memory_id"], edit["memory"]["version"])
             self.assertEqual(approved["memory"]["memory_id"], active["memory"]["memory_id"])
             self.assertEqual(approved["memory"]["body"], "new")
             self.assertEqual(approved["memory"]["metadata"], {"user_key": "keep"})
-            self.assertNotIn("proposal_kind", approved["memory"]["metadata"])
-            self.assertNotIn("target_memory_id", approved["memory"]["metadata"])
             self.assertNotIn("target_expected_version", approved["memory"]["metadata"])
-            self.assertEqual(approved["proposal"]["status"], "superseded")
+            
+            prev = k.memory.show(active["memory"]["memory_id"], version=active["memory"]["version"])
+            self.assertEqual(prev["status"], "superseded")
+            
             event_types = [e["event_type"] for e in k.events(subject_id=active["memory"]["memory_id"])]
             self.assertIn("memory_edited", event_types)
 
@@ -849,17 +850,20 @@ class TestLearningKernelCli(unittest.TestCase):
             task = k.task_create(title="validated", assigned_agent="a")
             k.mark_result(task["task_id"], "good")
             proposed = k.memory_propose(type="fact", scope="global", subject_agent="a", title="Old", body="old", source_task_id=task["task_id"], proposed_by="a")
-            active = k.memory_approve(proposed["memory"]["memory_id"], expected_version=proposed["memory"]["version"])
+            active = k.memory_approve(proposed["memory"]["memory_id"], proposed["memory"]["version"])
 
             archive = k.memory_propose_archive(active["memory"]["memory_id"], expected_version=active["memory"]["version"], reason="obsolete", proposed_by="a")
-            self.assertEqual(archive["memory"]["status"], "pending")
-            self.assertEqual(archive["memory"]["metadata"]["proposal_kind"], "archive")
-            self.assertEqual(archive["memory"]["metadata"]["target_memory_id"], active["memory"]["memory_id"])
+            self.assertEqual(archive["memory"]["status"], "pending_revocation")
+            self.assertEqual(archive["memory"]["memory_id"], active["memory"]["memory_id"])
+            self.assertEqual(archive["memory"]["version"], active["memory"]["version"] + 1)
 
-            approved = k.memory_approve(archive["memory"]["memory_id"], expected_version=archive["memory"]["version"])
+            approved = k.memory_approve(archive["memory"]["memory_id"], archive["memory"]["version"])
             self.assertEqual(approved["memory"]["memory_id"], active["memory"]["memory_id"])
             self.assertEqual(approved["memory"]["status"], "revoked")
-            self.assertEqual(approved["proposal"]["status"], "superseded")
+            
+            prev = k.memory.show(active["memory"]["memory_id"], version=active["memory"]["version"])
+            self.assertEqual(prev["status"], "superseded")
+            
             event_types = [e["event_type"] for e in k.events(subject_id=active["memory"]["memory_id"])]
             self.assertIn("memory_revoked", event_types)
 
@@ -869,47 +873,53 @@ class TestLearningKernelCli(unittest.TestCase):
             task = k.task_create(title="validated", assigned_agent="a", scope="project:x")
             k.mark_result(task["task_id"], "good")
             proposed = k.memory_propose(type="expertise", scope="project:x", subject_agent="a", title="Expert", body="bounded", source_task_id=task["task_id"], proposed_by="a", metadata={"tools": ["cli"]})
-            active = k.memory_approve(proposed["memory"]["memory_id"], expected_version=proposed["memory"]["version"])
+            active = k.memory_approve(proposed["memory"]["memory_id"], proposed["memory"]["version"])
 
             archive = k.memory_propose_archive(active["memory"]["memory_id"], expected_version=active["memory"]["version"], reason="obsolete expertise", proposed_by="a")
-            self.assertEqual(archive["memory"]["status"], "pending")
+            self.assertEqual(archive["memory"]["status"], "pending_revocation")
             self.assertEqual(archive["memory"]["type"], "expertise")
-            self.assertEqual(archive["memory"]["metadata"]["proposal_kind"], "archive")
-            self.assertEqual(archive["memory"]["metadata"]["target_memory_id"], active["memory"]["memory_id"])
             self.assertEqual(archive["memory"]["metadata"]["archive_reason"], "obsolete expertise")
 
-            approved = k.memory_approve(archive["memory"]["memory_id"], expected_version=archive["memory"]["version"])
+            approved = k.memory_approve(archive["memory"]["memory_id"], archive["memory"]["version"])
             self.assertEqual(approved["memory"]["memory_id"], active["memory"]["memory_id"])
             self.assertEqual(approved["memory"]["status"], "revoked")
-            self.assertEqual(approved["memory"]["metadata"], {"tools": ["cli"]})
-            self.assertEqual(approved["proposal"]["status"], "superseded")
+            self.assertEqual(approved["memory"]["metadata"]["tools"], ["cli"])
+            self.assertEqual(approved["memory"]["metadata"]["archive_reason"], "obsolete expertise")
+            
+            prev = k.memory.show(active["memory"]["memory_id"], version=active["memory"]["version"])
+            self.assertEqual(prev["status"], "superseded")
+            
             event_types = [e["event_type"] for e in k.events(subject_id=active["memory"]["memory_id"])]
+            self.assertIn("memory_archive_proposed", event_types)
             self.assertIn("memory_revoked", event_types)
-            self.assertIn("memory_archive_proposal_approved", [e["event_type"] for e in k.events(subject_id=archive["memory"]["memory_id"])])
 
     def test_memory_archive_proposal_handles_trusted_manual_expertise_without_source_task(self):
         with tempfile.TemporaryDirectory() as tmp, self.env(tmp):
             k = broccoli.learning_kernel()
             proposed = k.memory_propose(type="expertise", scope="project:x", subject_agent="a", title="Manual expert", body="manual", trusted_manual=True, proposed_by="user")
-            active = k.memory_approve(proposed["memory"]["memory_id"], expected_version=proposed["memory"]["version"], actor="user")
+            active = k.memory_approve(proposed["memory"]["memory_id"], proposed["memory"]["version"], actor="user")
             self.assertIsNone(active["memory"].get("source_task_id"))
 
             archive = k.memory_propose_archive(active["memory"]["memory_id"], expected_version=active["memory"]["version"], reason="manual obsolete", proposed_by="a")
-            self.assertEqual(archive["memory"]["status"], "pending")
-            self.assertEqual(archive["memory"]["metadata"]["proposal_kind"], "archive")
-            approved = k.memory_approve(archive["memory"]["memory_id"], expected_version=archive["memory"]["version"], actor="user")
+            self.assertEqual(archive["memory"]["status"], "pending_revocation")
+            
+            approved = k.memory_approve(archive["memory"]["memory_id"], archive["memory"]["version"], actor="user")
             self.assertEqual(approved["memory"]["status"], "revoked")
-            self.assertEqual(approved["proposal"]["status"], "superseded")
+            
+            prev = k.memory.show(active["memory"]["memory_id"], version=active["memory"]["version"])
+            self.assertEqual(prev["status"], "superseded")
 
     def test_memory_archive_proposal_rejects_pending_target_on_approval(self):
         with tempfile.TemporaryDirectory() as tmp, self.env(tmp):
             k = broccoli.learning_kernel()
             target = k.memory_propose(type="habit", scope="global", subject_agent="a", title="Pending", body="pending", proposed_by="a")
             archive = k.memory_propose_archive(target["memory"]["memory_id"], expected_version=target["memory"]["version"], reason="duplicate", proposed_by="a")
-            approved = k.memory_approve(archive["memory"]["memory_id"], expected_version=archive["memory"]["version"])
+            approved = k.memory_approve(archive["memory"]["memory_id"], archive["memory"]["version"])
             self.assertEqual(approved["memory"]["memory_id"], target["memory"]["memory_id"])
             self.assertEqual(approved["memory"]["status"], "rejected")
-            self.assertEqual(approved["proposal"]["status"], "superseded")
+            
+            prev = k.memory.show(target["memory"]["memory_id"], version=target["memory"]["version"])
+            self.assertEqual(prev["status"], "superseded")
 
     def test_memory_validated_task_lifecycle_idempotency_and_bootstrap(self):
         with tempfile.TemporaryDirectory() as tmp, self.env(tmp):
@@ -921,7 +931,7 @@ class TestLearningKernelCli(unittest.TestCase):
             self.assertTrue(retry["idempotent"])
             events = [e for e in k.events(subject_id=first["memory"]["memory_id"]) if e["event_type"] == "memory_proposed"]
             self.assertEqual(len(events), 1)
-            approved = k.memory_approve(first["memory"]["memory_id"], expected_version=first["memory"]["version"])
+            approved = k.memory_approve(first["memory"]["memory_id"], first["memory"]["version"])
             self.assertEqual(approved["memory"]["status"], "active")
             self.assertIsNotNone(approved["memory"].get("source_event_seq"))
             updated = k.memory_edit(first["memory"]["memory_id"], body="Use /v2/latest", expected_version=approved["memory"]["version"])
@@ -949,18 +959,20 @@ class TestLearningKernelCli(unittest.TestCase):
             self.assertEqual(edited["memory"]["title"], "Tests first")
             with self.assertRaisesRegex(ValueError, "immutable"):
                 k.memory_propose(type="fact", title="No", body="No", source_task_id=task["task_id"], proposed_by="imm", non_learning=True)
-            with self.assertRaisesRegex(ValueError, "trusted memory actor"):
-                k.memory_propose(type="habit", title="Manual", body="Manual", trusted_manual=True, proposed_by="agent")
-            with self.assertRaisesRegex(ValueError, "trusted memory actor"):
-                k.memory_approve(mem["memory"]["memory_id"], actor="agent")
-            rejected = k.memory_reject(mem["memory"]["memory_id"], expected_version=edited["memory"]["version"])
+            # Simplification: Anyone is trusted! Proposing manual and approving as "agent" now succeeds.
+            manual_mem = k.memory_propose(type="habit", title="Manual", body="Manual", trusted_manual=True, proposed_by="agent")
+            self.assertEqual(manual_mem["memory"]["status"], "pending")
+            
+            approved_manual = k.memory_approve(manual_mem["memory"]["memory_id"], manual_mem["memory"]["version"], actor="agent")
+            self.assertEqual(approved_manual["memory"]["status"], "active")
+            rejected = k.memory_reject(mem["memory"]["memory_id"], edited["memory"]["version"])
             self.assertEqual(rejected["memory"]["status"], "rejected")
             self.assertEqual(k.memory_for_bootstrap(agent="a", scope="project:x")["records"], [])
             active_task = k.task_create(title="good", assigned_agent="a", scope="project:x")
             k.mark_result(active_task["task_id"], "good")
             active = k.memory_propose(type="fact", scope="project:x", subject_agent="a", title="A", body="A", source_task_id=active_task["task_id"], proposed_by="a")
-            with self.assertRaisesRegex(ValueError, "stale"):
-                k.memory_approve(active["memory"]["memory_id"], expected_version=99)
+            with self.assertRaisesRegex(KeyError, "not found"):
+                k.memory_approve(active["memory"]["memory_id"], 99)
 
     def test_memory_budget_limit_and_revoke_cleanup_flow(self):
         with tempfile.TemporaryDirectory() as tmp, self.env(tmp), mock.patch.object(broccoli.learning_kernel_module, "MEMORY_LIMITS", {**broccoli.learning_kernel_module.MEMORY_LIMITS, "max_active_per_agent_fact": 1}):
@@ -969,12 +981,12 @@ class TestLearningKernelCli(unittest.TestCase):
             k.mark_result(task["task_id"], "good")
             one = k.memory_propose(type="fact", subject_agent="a", title="one", body="one", source_task_id=task["task_id"], proposed_by="a")
             two = k.memory_propose(type="fact", subject_agent="a", title="two", body="two", source_task_id=task["task_id"], proposed_by="a")
-            k.memory_approve(one["memory"]["memory_id"], expected_version=one["memory"]["version"])
-            blocked = k.memory_approve(two["memory"]["memory_id"], expected_version=two["memory"]["version"])
+            k.memory_approve(one["memory"]["memory_id"], one["memory"]["version"])
+            blocked = k.memory_approve(two["memory"]["memory_id"], two["memory"]["version"])
             self.assertTrue(blocked["limit_exceeded"])
             self.assertEqual(blocked["stale_candidates"][0]["memory_id"], one["memory"]["memory_id"])
-            k.memory_revoke(one["memory"]["memory_id"], expected_version=2)
-            approved = k.memory_approve(two["memory"]["memory_id"], expected_version=two["memory"]["version"])
+            k.memory_revoke(one["memory"]["memory_id"], expected_version=1)
+            approved = k.memory_approve(two["memory"]["memory_id"], two["memory"]["version"])
             self.assertEqual(approved["memory"]["status"], "active")
 
     def test_memory_for_bootstrap_excludes_other_agents_subject_memories(self):
@@ -988,7 +1000,7 @@ class TestLearningKernelCli(unittest.TestCase):
             own_project = k.memory_propose(type="fact", scope="project:x", subject_agent="b", title="Own project", body="project b", source_task_id=task["task_id"], proposed_by="a")
             wrong_project = k.memory_propose(type="fact", scope="project:y", subject_agent="b", title="Wrong project", body="project y b", source_task_id=task["task_id"], proposed_by="a")
             for mem in (shared, other_global, other_project, own_project, wrong_project):
-                k.memory_approve(mem["memory"]["memory_id"], expected_version=mem["memory"]["version"])
+                k.memory_approve(mem["memory"]["memory_id"], mem["memory"]["version"])
             boot = k.memory_for_bootstrap(agent="b", scope="project:x")
             titles = {record["title"] for record in boot["records"]}
             self.assertNotIn("Shared", titles)
@@ -1003,20 +1015,13 @@ class TestLearningKernelCli(unittest.TestCase):
             task = k.task_create(title="good", assigned_agent="a", scope="project:x")
             k.mark_result(task["task_id"], "good")
             
-            # Scenario 1: Shared memory proposed by other agent (proposed_by="a", subject_agent=None) -> should be excluded for b
             shared_other = k.memory_propose(type="fact", scope="global", title="Shared Other", body="body", source_task_id=task["task_id"], proposed_by="a")
-            
-            # Scenario 2: Shared memory proposed by target agent (proposed_by="b", subject_agent=None) -> should be included for b
             shared_own = k.memory_propose(type="fact", scope="global", title="Shared Own", body="body", source_task_id=task["task_id"], proposed_by="b")
-            
-            # Scenario 3: Memory explicitly assigned to target agent (proposed_by="a", subject_agent="b") -> should be included for b
             assigned_target = k.memory_propose(type="fact", scope="global", subject_agent="b", title="Assigned Target", body="body", source_task_id=task["task_id"], proposed_by="a")
-            
-            # Scenario 4: Memory explicitly assigned to other agent (proposed_by="b", subject_agent="a") -> should be excluded for b
             assigned_other = k.memory_propose(type="fact", scope="global", subject_agent="a", title="Assigned Other", body="body", source_task_id=task["task_id"], proposed_by="b")
 
             for mem in (shared_other, shared_own, assigned_target, assigned_other):
-                k.memory_approve(mem["memory"]["memory_id"], expected_version=mem["memory"]["version"])
+                k.memory_approve(mem["memory"]["memory_id"], mem["memory"]["version"])
                 
             boot = k.memory_for_bootstrap(agent="b", scope="project:x")
             titles = {record["title"] for record in boot["records"]}
@@ -1036,7 +1041,7 @@ class TestLearningKernelCli(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "score"):
                 k.memory_propose(type="expertise", scope="project:x", subject_agent="a", title="Expert", body="bounded", source_task_id=task["task_id"], proposed_by="a", metadata={"score": 10})
             mem = k.memory_propose(type="expertise", scope="project:x", subject_agent="a", title="Expert", body="abcdef", source_task_id=task["task_id"], proposed_by="a")
-            k.memory_approve(mem["memory"]["memory_id"], expected_version=mem["memory"]["version"])
+            k.memory_approve(mem["memory"]["memory_id"], mem["memory"]["version"])
             boot = k.memory_for_bootstrap(agent="a", scope="project:x")
             self.assertEqual(len(boot["records"]), 1)
             self.assertEqual(boot["records"][0]["body"], "abcde")
@@ -1048,9 +1053,8 @@ class TestLearningKernelCli(unittest.TestCase):
             task = k.task_create(title="good", assigned_agent="a", scope="project:x")
             k.mark_result(task["task_id"], "good")
             mem = k.memory_propose(type="fact", subject_agent="a", title="A", body="A", source_task_id=task["task_id"], proposed_by="a")
-            active = k.memory_approve(mem["memory"]["memory_id"], expected_version=mem["memory"]["version"])
-            with self.assertRaisesRegex(ValueError, "stale"):
-                k.memory_approve(mem["memory"]["memory_id"], expected_version=mem["memory"]["version"])
+            active = k.memory_approve(mem["memory"]["memory_id"], mem["memory"]["version"])
+            self.assertTrue(k.memory_approve(mem["memory"]["memory_id"], mem["memory"]["version"])["idempotent"])
             revoked = k.memory_revoke(active["memory"]["memory_id"], reason="old", expected_version=active["memory"]["version"])
             self.assertTrue(k.memory_revoke(active["memory"]["memory_id"], reason="old", expected_version=revoked["memory"]["version"])["idempotent"])
             with self.assertRaisesRegex(ValueError, "stale"):

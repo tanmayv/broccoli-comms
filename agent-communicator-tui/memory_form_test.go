@@ -2,13 +2,12 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"reflect"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/tanmayvijay/home-manager-core/agent-communicator-tui/internal/tracker"
 )
 
 func TestMemoryNewFormOpenCancelAndValidation(t *testing.T) {
@@ -30,12 +29,36 @@ func TestMemoryNewFormOpenCancelAndValidation(t *testing.T) {
 	}
 }
 
+type mockMemoryFormClient struct {
+	localClient
+	proposeCalled bool
+	proposeParams map[string]any
+	proposeErr    error
+}
+
+func (m *mockMemoryFormClient) MemoryPropose(ctx context.Context, params map[string]any) (tracker.MemoryResult, error) {
+	m.proposeCalled = true
+	m.proposeParams = params
+	return tracker.MemoryResult{}, m.proposeErr
+}
+
 func TestMemoryNewFormSubmitArgs(t *testing.T) {
 	form := filledNewMemoryForm()
-	got := memoryFormArgs(form)
-	want := []string{"memory", "propose", "--type", "habit", "--title", "Run tests", "--body", "Always run go test", "--agent", "broccoli-agent", "--subject-agent", "broccoli-agent", "--source-task", "task-1", "--tag", "quality", "--tag", "tests", "--json"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("args=%#v want %#v", got, want)
+	mock := &mockMemoryFormClient{}
+	_ = submitMemoryFormCmd(mock, form)().(memoryFormSubmitted)
+
+	if !mock.proposeCalled {
+		t.Fatalf("expected MemoryPropose to be called")
+	}
+	p := mock.proposeParams
+	if p["type"] != "habit" || p["title"] != "Run tests" || p["body"] != "Always run go test" ||
+		p["proposed_by"] != "broccoli-agent" || p["subject_agent"] != "broccoli-agent" ||
+		p["source_task_id"] != "task-1" {
+		t.Fatalf("unexpected propose params: %#v", p)
+	}
+	tags, ok := p["tags"].([]string)
+	if !ok || len(tags) != 2 || tags[0] != "quality" || tags[1] != "tests" {
+		t.Fatalf("unexpected tags: %#v", p["tags"])
 	}
 }
 
@@ -72,37 +95,20 @@ func TestMemoryTabEditUsesEditorInsteadOfInlineForm(t *testing.T) {
 }
 
 func TestMemoryFormSubmitSuccessClosesAndRefreshes(t *testing.T) {
-	old := runApprovalCLI
-	defer func() { runApprovalCLI = old }()
-	calls := [][]string{}
-	runApprovalCLI = func(_ context.Context, args ...string) ([]byte, error) {
-		calls = append(calls, args)
-		if len(calls) == 1 {
-			return json.Marshal(map[string]any{"ok": true})
-		}
-		return json.Marshal(map[string]any{"pending": []memoryRecord{{MemoryID: "mem-p"}}, "approved": []memoryRecord{}})
-	}
-	m := model{memoryForm: filledNewMemoryForm()}
-	msg := submitMemoryFormCmd(m.memoryForm)().(memoryFormSubmitted)
+	mock := &mockMemoryFormClient{}
+	m := model{memoryForm: filledNewMemoryForm(), local: mock}
+	msg := submitMemoryFormCmd(mock, m.memoryForm)().(memoryFormSubmitted)
 	updatedModel, cmd := m.Update(msg)
 	updated := updatedModel.(model)
 	if msg.Err != nil || updated.memoryForm.Mode != memoryFormNone || !updated.memoryLoading || cmd == nil {
 		t.Fatalf("success should close/loading/refresh msg=%+v updated=%+v cmd=%v", msg, updated.memoryForm, cmd)
 	}
-	_ = cmd()
-	if len(calls) != 2 {
-		t.Fatalf("expected submit+refresh calls, got %d", len(calls))
-	}
 }
 
 func TestMemoryFormSubmitErrorPreservesInput(t *testing.T) {
-	old := runApprovalCLI
-	defer func() { runApprovalCLI = old }()
-	runApprovalCLI = func(_ context.Context, args ...string) ([]byte, error) {
-		return []byte("boom"), errors.New("failed")
-	}
-	m := model{memoryForm: filledNewMemoryForm()}
-	msg := submitMemoryFormCmd(m.memoryForm)().(memoryFormSubmitted)
+	mock := &mockMemoryFormClient{proposeErr: errors.New("boom")}
+	m := model{memoryForm: filledNewMemoryForm(), local: mock}
+	msg := submitMemoryFormCmd(mock, m.memoryForm)().(memoryFormSubmitted)
 	updatedModel, cmd := m.Update(msg)
 	updated := updatedModel.(model)
 	if cmd != nil || updated.memoryForm.Mode != memoryFormNew || updated.memoryForm.Inputs[memoryFormTitle].Value() != "Run tests" || updated.memoryErr == nil {

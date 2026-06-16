@@ -35,7 +35,7 @@ func loadSwarmTab(m model) tea.Cmd {
 
 func loadSavedTabMessages(model) tea.Cmd { return nil }
 
-func loadMemoryTab(model) tea.Cmd { return loadMemoryApprovalsCmd() }
+func loadMemoryTab(m model) tea.Cmd { return loadMemoryApprovalsCmd(m.local) }
 
 func appTabs() []appTab {
 	return append([]appTab(nil), registeredAppTabs...)

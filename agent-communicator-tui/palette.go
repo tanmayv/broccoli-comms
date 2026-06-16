@@ -205,7 +205,7 @@ func commandPaletteActions() []commandAction {
 				m.memoryOffset = 0
 				m.memoryLoading = true
 				m.memoryErr = nil
-				return loadMemoryApprovalsCmd()
+				return loadMemoryApprovalsCmd(m.local)
 			},
 		},
 		{

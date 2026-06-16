@@ -34,6 +34,16 @@ type localClient interface {
 	ListSwarms(context.Context) (tracker.ListSwarmsResult, error)
 	GetSwarmTimeline(context.Context, string, int) (tracker.SwarmTimelineResult, error)
 	AssignSwarm(context.Context, string, string, []string) (tracker.AssignSwarmResult, error)
+	MemoryShow(ctx context.Context, memoryID string, version int) (tracker.MemoryRecord, error)
+	MemoryList(ctx context.Context, params map[string]any) ([]tracker.MemoryRecord, error)
+	MemoryPropose(ctx context.Context, params map[string]any) (tracker.MemoryResult, error)
+	MemoryProposeEdit(ctx context.Context, params map[string]any) (tracker.MemoryResult, error)
+	MemoryProposeArchive(ctx context.Context, params map[string]any) (tracker.MemoryResult, error)
+	MemoryApprove(ctx context.Context, memoryID string, version int, actor string) (tracker.MemoryResult, error)
+	MemoryReject(ctx context.Context, memoryID string, version int, reason string, actor string) (tracker.MemoryResult, error)
+	MemoryEdit(ctx context.Context, params map[string]any) (tracker.MemoryResult, error)
+	MemoryRollback(ctx context.Context, memoryID string, targetVersion, expectedVersion int, actor string) (tracker.MemoryResult, error)
+	MemoryRevoke(ctx context.Context, memoryID string, reason string, expectedVersion int, actor string) (tracker.MemoryResult, error)
 }
 
 type messageIDSender interface {

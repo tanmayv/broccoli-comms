@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -10,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/tanmayvijay/home-manager-core/agent-communicator-tui/internal/tracker"
 )
 
 func sampleMemoryRecords() []memoryRecord {
@@ -111,13 +111,25 @@ func TestMemoryListViewAddsGapBetweenMemoryRows(t *testing.T) {
 	}
 }
 
-func TestMemoryTabRefreshSetsLoadingAndLoadsRecords(t *testing.T) {
-	old := runApprovalCLI
-	defer func() { runApprovalCLI = old }()
-	runApprovalCLI = func(_ context.Context, args ...string) ([]byte, error) {
-		return json.Marshal(map[string]any{"pending": []memoryRecord{{MemoryID: "mem-p", Status: "pending"}}, "approved": []memoryRecord{{MemoryID: "mem-a", Status: "active"}}})
+type mockMemoryRefreshClient struct {
+	localClient
+	calls []map[string]any
+}
+
+func (m *mockMemoryRefreshClient) MemoryList(ctx context.Context, params map[string]any) ([]tracker.MemoryRecord, error) {
+	m.calls = append(m.calls, params)
+	if params["status"] == "pending" {
+		return []tracker.MemoryRecord{{MemoryID: "mem-p", Status: "pending"}}, nil
 	}
-	m := model{mode: memoryView}
+	if params["status"] == "active" {
+		return []tracker.MemoryRecord{{MemoryID: "mem-a", Status: "active"}}, nil
+	}
+	return nil, nil
+}
+
+func TestMemoryTabRefreshSetsLoadingAndLoadsRecords(t *testing.T) {
+	mock := &mockMemoryRefreshClient{}
+	m := model{mode: memoryView, local: mock}
 	updated, cmd := m.updateMemoryManagement(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
 	if !updated.memoryLoading || cmd == nil {
 		t.Fatalf("refresh should set loading and return command, loading=%v cmd=%v", updated.memoryLoading, cmd)
@@ -125,6 +137,9 @@ func TestMemoryTabRefreshSetsLoadingAndLoadsRecords(t *testing.T) {
 	msg := cmd().(memoryApprovalsLoaded)
 	if msg.Err != nil || len(msg.Items) != 2 {
 		t.Fatalf("load result err=%v items=%v", msg.Err, msg.Items)
+	}
+	if len(mock.calls) != 2 {
+		t.Fatalf("expected 2 calls, got %d", len(mock.calls))
 	}
 }
 

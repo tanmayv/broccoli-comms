@@ -2,12 +2,11 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"reflect"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/tanmayvijay/home-manager-core/agent-communicator-tui/internal/tracker"
 )
 
 func TestMemoryTabActionAvailabilityByStatus(t *testing.T) {
@@ -25,18 +24,40 @@ func TestMemoryTabActionAvailabilityByStatus(t *testing.T) {
 	}
 }
 
+type mockMemoryActionClient struct {
+	localClient
+	rejectCalled   bool
+	rejectParams   struct{ ID, reason string; version int }
+	revokeCalled   bool
+	revokeParams   struct{ ID, reason string; version int }
+	rollbackCalled bool
+	rollbackParams struct{ ID string; targetVersion, expectedVersion int }
+}
+
+func (m *mockMemoryActionClient) MemoryReject(ctx context.Context, memoryID string, version int, reason string, actor string) (tracker.MemoryResult, error) {
+	m.rejectCalled = true
+	m.rejectParams = struct{ ID, reason string; version int }{memoryID, reason, version}
+	return tracker.MemoryResult{}, nil
+}
+
+func (m *mockMemoryActionClient) MemoryRevoke(ctx context.Context, memoryID string, reason string, expectedVersion int, actor string) (tracker.MemoryResult, error) {
+	m.revokeCalled = true
+	m.revokeParams = struct{ ID, reason string; version int }{memoryID, reason, expectedVersion}
+	return tracker.MemoryResult{}, nil
+}
+
+func (m *mockMemoryActionClient) MemoryRollback(ctx context.Context, memoryID string, targetVersion, expectedVersion int, actor string) (tracker.MemoryResult, error) {
+	m.rollbackCalled = true
+	m.rollbackParams = struct{ ID string; targetVersion, expectedVersion int }{memoryID, targetVersion, expectedVersion}
+	return tracker.MemoryResult{}, nil
+}
+
 func TestMemoryTabDestructiveActionFirstKeyConfirmsSecondExecutes(t *testing.T) {
-	old := runApprovalCLI
-	defer func() { runApprovalCLI = old }()
-	var calls [][]string
-	runApprovalCLI = func(_ context.Context, args ...string) ([]byte, error) {
-		calls = append(calls, args)
-		return json.Marshal(map[string]any{"ok": true})
-	}
-	m := model{mode: memoryView, memoryItems: []memoryRecord{{MemoryID: "mem-p", Status: "pending", Version: 2}}}
+	mock := &mockMemoryActionClient{}
+	m := model{mode: memoryView, local: mock, memoryItems: []memoryRecord{{MemoryID: "mem-p", Status: "pending", Version: 2}}}
 	updated, cmd := m.updateMemoryManagement(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
-	if cmd != nil || !updated.memoryConfirmationMatches(updated.memoryItems[0], "reject") || len(calls) != 0 {
-		t.Fatalf("first delete should only arm confirmation, confirm=%+v cmd=%v calls=%#v", updated.memoryConfirm, cmd, calls)
+	if cmd != nil || !updated.memoryConfirmationMatches(updated.memoryItems[0], "reject") || mock.rejectCalled {
+		t.Fatalf("first delete should only arm confirmation, confirm=%+v cmd=%v called=%v", updated.memoryConfirm, cmd, mock.rejectCalled)
 	}
 	updated, cmd = updated.updateMemoryManagement(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
 	if cmd == nil || updated.memoryConfirm.Active() || !updated.memoryLoading {
@@ -46,21 +67,17 @@ func TestMemoryTabDestructiveActionFirstKeyConfirmsSecondExecutes(t *testing.T) 
 	if res.Err != nil {
 		t.Fatalf("delete command error: %v", res.Err)
 	}
-	want := []string{"memory", "reject", "mem-p", "--expected-version", "2", "--json", "--reason", "removed from Memory Management tab"}
-	if !reflect.DeepEqual(calls[0], want) {
-		t.Fatalf("args=%#v want %#v", calls[0], want)
+	if !mock.rejectCalled {
+		t.Fatalf("expected MemoryReject to be called")
+	}
+	if mock.rejectParams.ID != "mem-p" || mock.rejectParams.version != 2 || mock.rejectParams.reason != "removed from Memory Management tab" {
+		t.Fatalf("unexpected reject params: %+v", mock.rejectParams)
 	}
 }
 
 func TestMemoryTabDeleteActiveConfirmsThenRevokes(t *testing.T) {
-	old := runApprovalCLI
-	defer func() { runApprovalCLI = old }()
-	var calls [][]string
-	runApprovalCLI = func(_ context.Context, args ...string) ([]byte, error) {
-		calls = append(calls, args)
-		return json.Marshal(map[string]any{"ok": true})
-	}
-	m := model{mode: memoryView, memoryItems: []memoryRecord{{MemoryID: "mem-a", Status: "active", Version: 5}}}
+	mock := &mockMemoryActionClient{}
+	m := model{mode: memoryView, local: mock, memoryItems: []memoryRecord{{MemoryID: "mem-a", Status: "active", Version: 5}}}
 	updated, cmd := m.updateMemoryManagement(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
 	if cmd != nil || !updated.memoryConfirmationMatches(updated.memoryItems[0], "revoke") {
 		t.Fatalf("first active delete should confirm revoke, confirm=%+v cmd=%v", updated.memoryConfirm, cmd)
@@ -73,21 +90,17 @@ func TestMemoryTabDeleteActiveConfirmsThenRevokes(t *testing.T) {
 	if res.Err != nil {
 		t.Fatalf("revoke command error: %v", res.Err)
 	}
-	want := []string{"memory", "revoke", "mem-a", "--expected-version", "5", "--json", "--reason", "removed from Memory Management tab"}
-	if !reflect.DeepEqual(calls[0], want) {
-		t.Fatalf("args=%#v want %#v", calls[0], want)
+	if !mock.revokeCalled {
+		t.Fatalf("expected MemoryRevoke to be called")
+	}
+	if mock.revokeParams.ID != "mem-a" || mock.revokeParams.version != 5 || mock.revokeParams.reason != "removed from Memory Management tab" {
+		t.Fatalf("unexpected revoke params: %+v", mock.revokeParams)
 	}
 }
 
 func TestMemoryTabRollbackConfirmationAndArgs(t *testing.T) {
-	old := runApprovalCLI
-	defer func() { runApprovalCLI = old }()
-	var calls [][]string
-	runApprovalCLI = func(_ context.Context, args ...string) ([]byte, error) {
-		calls = append(calls, args)
-		return json.Marshal(map[string]any{"ok": true})
-	}
-	m := model{mode: memoryView, memoryItems: []memoryRecord{{MemoryID: "mem-a", Status: "active", Version: 4}}}
+	mock := &mockMemoryActionClient{}
+	m := model{mode: memoryView, local: mock, memoryItems: []memoryRecord{{MemoryID: "mem-a", Status: "active", Version: 4}}}
 	updated, cmd := m.updateMemoryManagement(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("R")})
 	if cmd != nil || !updated.memoryConfirmationMatches(updated.memoryItems[0], "rollback") {
 		t.Fatalf("first rollback should confirm, confirm=%+v cmd=%v", updated.memoryConfirm, cmd)
@@ -100,9 +113,11 @@ func TestMemoryTabRollbackConfirmationAndArgs(t *testing.T) {
 	if res.Err != nil {
 		t.Fatalf("rollback command error: %v", res.Err)
 	}
-	want := []string{"memory", "rollback", "mem-a", "--to-version", "3", "--expected-version", "4", "--json"}
-	if !reflect.DeepEqual(calls[0], want) {
-		t.Fatalf("args=%#v want %#v", calls[0], want)
+	if !mock.rollbackCalled {
+		t.Fatalf("expected MemoryRollback to be called")
+	}
+	if mock.rollbackParams.ID != "mem-a" || mock.rollbackParams.targetVersion != 3 || mock.rollbackParams.expectedVersion != 4 {
+		t.Fatalf("unexpected rollback params: %+v", mock.rollbackParams)
 	}
 }
 

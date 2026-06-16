@@ -289,7 +289,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.memoryErr = msg.Err
 		m.memoryConfirm = memoryActionConfirmation{}
 		if msg.Err == nil {
-			return m, tea.Batch(m.reloadMessages(), loadMemoryApprovalsCmd())
+			return m, tea.Batch(m.reloadMessages(), loadMemoryApprovalsCmd(m.local))
 		}
 		m.memoryLoading = false
 	case memoryApprovalsLoaded:
@@ -307,7 +307,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.Err
 		m.memoryErr = msg.Err
 		if msg.Err == nil {
-			return m, loadMemoryApprovalsCmd()
+			return m, loadMemoryApprovalsCmd(m.local)
 		}
 	case memoryFormSubmitted:
 		m.err = msg.Err
@@ -315,7 +315,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.memoryLoading = msg.Err == nil
 		if msg.Err == nil {
 			m.memoryForm = memoryFormState{}
-			return m, loadMemoryApprovalsCmd()
+			return m, loadMemoryApprovalsCmd(m.local)
 		}
 	case tasksLoaded:
 		m.err = msg.Err

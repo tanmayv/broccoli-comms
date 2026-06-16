@@ -114,7 +114,7 @@ func (m model) updateMemoryForm(msg tea.Msg) (model, tea.Cmd) {
 				m.memoryErr = err
 				return m, nil
 			}
-			return m, submitMemoryFormCmd(m.memoryForm)
+			return m, submitMemoryFormCmd(m.local, m.memoryForm)
 		}
 	}
 	if len(m.memoryForm.Inputs) > 0 && m.memoryForm.Index >= 0 && m.memoryForm.Index < len(m.memoryForm.Inputs) {
@@ -153,40 +153,39 @@ func validMemoryType(value string) bool {
 	}
 }
 
-func submitMemoryFormCmd(form memoryFormState) tea.Cmd {
+func submitMemoryFormCmd(local localClient, form memoryFormState) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		args := memoryFormArgs(form)
-		out, err := runApprovalCLI(ctx, args...)
-		if err != nil {
-			return memoryFormSubmitted{Action: strings.Join(args[:min(2, len(args))], " "), Err: fmt.Errorf("memory form submit failed: %w: %s", err, string(out))}
-		}
-		return memoryFormSubmitted{Action: strings.Join(args[:min(2, len(args))], " ")}
-	}
-}
 
-func memoryFormArgs(form memoryFormState) []string {
-	title := strings.TrimSpace(form.Inputs[memoryFormTitle].Value())
-	body := strings.TrimSpace(form.Inputs[memoryFormBody].Value())
-	args := []string{"memory", "propose", "--type", strings.TrimSpace(form.Inputs[memoryFormType].Value()), "--title", title, "--body", body}
-	if agent := strings.TrimSpace(form.Inputs[memoryFormAgent].Value()); agent != "" {
-		args = append(args, "--agent", agent)
+		params := map[string]any{
+			"type":           strings.TrimSpace(form.Inputs[memoryFormType].Value()),
+			"title":          strings.TrimSpace(form.Inputs[memoryFormTitle].Value()),
+			"body":           strings.TrimSpace(form.Inputs[memoryFormBody].Value()),
+			"trusted_manual": form.TrustedManual,
+		}
+
+		if agent := strings.TrimSpace(form.Inputs[memoryFormAgent].Value()); agent != "" {
+			params["proposed_by"] = agent
+		}
+		if subject := strings.TrimSpace(form.Inputs[memoryFormSubjectAgent].Value()); subject != "" {
+			params["subject_agent"] = subject
+		}
+		if sourceTask := strings.TrimSpace(form.Inputs[memoryFormSourceTask].Value()); sourceTask != "" {
+			params["source_task_id"] = sourceTask
+		}
+
+		tags := splitMemoryTags(form.Inputs[memoryFormTags].Value())
+		if len(tags) > 0 {
+			params["tags"] = tags
+		}
+
+		_, err := local.MemoryPropose(ctx, params)
+		if err != nil {
+			return memoryFormSubmitted{Action: "memory propose", Err: fmt.Errorf("memory form submit failed: %w", err)}
+		}
+		return memoryFormSubmitted{Action: "memory propose"}
 	}
-	if subject := strings.TrimSpace(form.Inputs[memoryFormSubjectAgent].Value()); subject != "" {
-		args = append(args, "--subject-agent", subject)
-	}
-	if sourceTask := strings.TrimSpace(form.Inputs[memoryFormSourceTask].Value()); sourceTask != "" {
-		args = append(args, "--source-task", sourceTask)
-	}
-	if form.TrustedManual {
-		args = append(args, "--trusted-manual")
-	}
-	for _, tag := range splitMemoryTags(form.Inputs[memoryFormTags].Value()) {
-		args = append(args, "--tag", tag)
-	}
-	args = append(args, "--json")
-	return args
 }
 
 func splitMemoryTags(value string) []string {

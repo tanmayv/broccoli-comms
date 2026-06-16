@@ -12,5 +12,5 @@ func (m model) confirmOrRunMemoryAction(mem memoryRecord, action string) (model,
 	}
 	m.memoryLoading = true
 	m = m.clearMemoryConfirmation()
-	return m, memoryManagerActionCmd(mem, action)
+	return m, memoryManagerActionCmd(m.local, mem, action)
 }

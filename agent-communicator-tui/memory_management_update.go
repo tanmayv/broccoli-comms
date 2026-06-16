@@ -86,14 +86,14 @@ func (m model) updateMemoryManagement(msg tea.KeyMsg) (model, tea.Cmd) {
 			return m, nil
 		case "e":
 			if mem, ok := m.selectedMemoryRecord(); ok {
-				return m, editMemoryInEditor(mem)
+				return m, editMemoryInEditor(m.local, mem)
 			}
 			return m, nil
 		case "a":
 			if mem, ok := m.selectedMemoryRecord(); ok && memoryActionAllowed(mem, "approve") {
 				m.memoryLoading = true
 				m = m.clearMemoryConfirmation()
-				return m, memoryManagerActionCmd(mem, "approve")
+				return m, memoryManagerActionCmd(m.local, mem, "approve")
 			}
 			return m, nil
 		case "d":
@@ -111,7 +111,7 @@ func (m model) updateMemoryManagement(msg tea.KeyMsg) (model, tea.Cmd) {
 		case "r":
 			m.memoryLoading = true
 			m = m.clearMemoryConfirmation()
-			return m, loadMemoryApprovalsCmd()
+			return m, loadMemoryApprovalsCmd(m.local)
 		}
 	}
 	return m, nil
