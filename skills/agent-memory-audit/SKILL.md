@@ -60,20 +60,19 @@ broccoli-comms memory history MEMORY_ID --json
 
 Keep notes bounded: record conclusions and ids, not bulky evidence.
 
-### 3. Classify evidence
+### 3. Classify evidence & Pruning
 
 Review task descriptions, working-state checkpoints, completion submissions, reviewer decisions, `need_improvements` loops, user corrections/clarifications, and current active/pending memory.
 
-Look for:
+Always compare new discoveries against existing active and pending memories. Prioritize pruning, consolidating duplicates, or re-classifying existing memories to the correct category over adding redundant new ones.
 
-- **Facts**: stable project/user facts, paths, endpoints, or constraints.
-- **Habits**: behavioral preferences or recurring operating rules.
-- **Skills**: repeatable procedures with triggers, steps, checks, and failure modes.
-- **Episodes**: compact validated task summaries or non-obvious pitfalls.
-- **Expertise**: evidence-backed competence notes without scores/ranks.
-- **Stale memory**: contradicted, obsolete, duplicate, overly broad, or unsafe entries.
-
-Before proposing a new memory, compare against existing active/pending memory. Prefer an edit proposal when new evidence refines, narrows, extends, or corrects an existing memory without making it too broad.
+Classify memories strictly according to these definitions:
+- **Expertise**: Exclusively used to capture the **persona of the agent** (role, traits, responsibilities, boundary rules, and collaboration partners). Do NOT use expertise for technical facts, system designs, or workarounds.
+- **Habits**: Used to capture **operational behaviors**, style rules, tool preferences, or recurring behavioral constraints (e.g., "always run nix flake check before submitting").
+- **Skills**: Used to capture step-by-step playbooks on **how to use specific tools** or execute complex multi-step procedures (e.g., how to mock environment directories in unit tests).
+- **Facts**: Used to remember stable, concrete, and verifiable data (e.g., specific database paths, API endpoints, table names).
+- **Episodes**: Used to record a **specific issue and its resolution** (e.g., a specific debugging trajectory, what failed, why it failed, and how it was fixed, or a major pitfall encountered during a task).
+- **Stale/Redundant Memory**: Obsolete, duplicate, or incorrectly classified entries. Propose to archive or edit/consolidate them immediately.
 
 ### 4. Draft candidate memory changes
 
