@@ -977,6 +977,24 @@ class TestLearningKernelCli(unittest.TestCase):
             approved = k.memory_approve(two["memory"]["memory_id"], expected_version=two["memory"]["version"])
             self.assertEqual(approved["memory"]["status"], "active")
 
+    def test_memory_for_bootstrap_excludes_other_agents_subject_memories(self):
+        with tempfile.TemporaryDirectory() as tmp, self.env(tmp):
+            k = broccoli.learning_kernel()
+            task = k.task_create(title="good", assigned_agent="a", scope="project:x")
+            k.mark_result(task["task_id"], "good")
+            shared = k.memory_propose(type="fact", scope="global", title="Shared", body="for everyone", source_task_id=task["task_id"], proposed_by="a")
+            other_global = k.memory_propose(type="fact", scope="global", subject_agent="a", title="Other global", body="only a", source_task_id=task["task_id"], proposed_by="a")
+            other_project = k.memory_propose(type="fact", scope="project:x", subject_agent="a", title="Other project", body="project only a", source_task_id=task["task_id"], proposed_by="a")
+            own_project = k.memory_propose(type="fact", scope="project:x", subject_agent="b", title="Own project", body="project b", source_task_id=task["task_id"], proposed_by="a")
+            for mem in (shared, other_global, other_project, own_project):
+                k.memory_approve(mem["memory"]["memory_id"], expected_version=mem["memory"]["version"])
+            boot = k.memory_for_bootstrap(agent="b", scope="project:x")
+            titles = {record["title"] for record in boot["records"]}
+            self.assertIn("Shared", titles)
+            self.assertIn("Own project", titles)
+            self.assertNotIn("Other global", titles)
+            self.assertNotIn("Other project", titles)
+
     def test_memory_expertise_constraints_and_bootstrap_limits(self):
         with tempfile.TemporaryDirectory() as tmp, self.env(tmp), mock.patch.object(broccoli.learning_kernel_module, "MEMORY_LIMITS", {**broccoli.learning_kernel_module.MEMORY_LIMITS, "bootstrap_max_records": 1, "bootstrap_max_body_chars_per_record": 5, "bootstrap_max_total_chars": 100}):
             k = broccoli.learning_kernel()

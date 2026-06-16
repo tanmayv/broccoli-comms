@@ -1556,8 +1556,20 @@ class LearningKernel:
 
     def _memory_for_bootstrap(self, *, agent: str, scope: str | None = None) -> dict[str, Any]:
         scopes = ["global", f"agent:{agent}"] + ([scope] if scope else [])
+        # Shared memories have no subject_agent and are selected by relevant scope.
+        # Agent-specific memories may use subject_agent across any applicable scope.
+        # Do not include global/project memories whose subject_agent names a different
+        # agent; those are durable for that agent only, despite their broad scope.
+        scope_placeholders = ",".join("?" for _ in scopes)
+        query = f"""
+            SELECT * FROM memory_records
+            WHERE status='active'
+              AND ((subject_agent IS NULL AND scope IN ({scope_placeholders})) OR subject_agent=?)
+            ORDER BY CASE WHEN scope=? THEN 0 WHEN subject_agent=? THEN 1 WHEN scope=? THEN 2 ELSE 3 END,
+                     validated_at DESC, title, memory_id
+        """
         with closing(self.connect()) as conn:
-            rows = [self.row_memory(r) for r in conn.execute("SELECT * FROM memory_records WHERE status='active' AND (scope IN (%s) OR subject_agent=?) ORDER BY CASE WHEN scope=? THEN 0 WHEN subject_agent=? THEN 1 WHEN scope=? THEN 2 ELSE 3 END, validated_at DESC, title, memory_id" % ",".join("?" for _ in scopes), (*scopes, agent, scope or "", agent, "global")).fetchall()]
+            rows = [self.row_memory(r) for r in conn.execute(query, (*scopes, agent, scope or "", agent, "global")).fetchall()]
         max_records = MEMORY_LIMITS["bootstrap_max_records"]; per = MEMORY_LIMITS["bootstrap_max_body_chars_per_record"]; total_limit = MEMORY_LIMITS["bootstrap_max_total_chars"]
         selected, total, omitted, truncated = [], 0, 0, False
         for mem in rows:
