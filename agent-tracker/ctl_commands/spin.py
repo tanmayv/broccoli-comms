@@ -85,7 +85,11 @@ def agent_contract_template() -> str | None:
         return None
     try:
         with open(path, "rb") as f:
-            learning = (tomllib.load(f).get("learning") or {})
+            cfg = tomllib.load(f)
+        agents_md = cfg.get("agents_md") or {}
+        if agents_md.get("static_sections"):
+            return "\n\n---\n\n".join(agents_md["static_sections"])
+        learning = cfg.get("learning") or {}
         if learning.get("agent_contract_template"):
             return str(learning["agent_contract_template"])
         if learning.get("agent_contract_template_path"):

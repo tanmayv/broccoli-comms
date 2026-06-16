@@ -1565,8 +1565,8 @@ class LearningKernel:
             SELECT * FROM memory_records
             WHERE status='active'
               AND scope IN ({scope_placeholders})
-              AND (subject_agent IS NULL OR subject_agent=?)
-            ORDER BY CASE WHEN scope=? THEN 0 WHEN subject_agent=? THEN 1 WHEN scope=? THEN 2 ELSE 3 END,
+              AND COALESCE(subject_agent, proposed_by)=?
+            ORDER BY CASE WHEN scope=? THEN 0 WHEN COALESCE(subject_agent, proposed_by)=? THEN 1 WHEN scope=? THEN 2 ELSE 3 END,
                      validated_at DESC, title, memory_id
         """
         with closing(self.connect()) as conn:

@@ -127,6 +127,11 @@ let
       enabled = cfg.config.paneOutput.enable;
       agent_types = cfg.config.paneOutput.agentTypes;
     };
+    agents_md = compactAttrs {
+      static_sections = cfg.config.agentsMd.staticSections;
+      summarize_memories = cfg.config.agentsMd.summarizeMemories;
+      full_expertise = cfg.config.agentsMd.fullExpertise;
+    };
     providers = lib.mapAttrs (_: providerToml) cfg.config.providers;
   };
 
@@ -380,6 +385,24 @@ in {
           };
         };
         description = "Provider defaults rendered to ~/.config/broccoli-comms/config.toml under [providers.<name>].";
+      };
+
+      agentsMd = {
+        staticSections = mkOption {
+          type = types.listOf types.str;
+          default = [];
+          description = "A list of custom static Markdown sections (guidelines, rules, contracts) to include in AGENTS.md. If empty, the system falls back to the standard default agent operating contract sections. Defaults to [].";
+        };
+        summarizeMemories = mkOption {
+          type = types.bool;
+          default = true;
+          description = "Whether to summarize non-expertise memories (facts, habits, episodes) in AGENTS.md by listing only their titles, IDs, and the exact command to view them in full, rather than printing their entire bodies. Defaults to true.";
+        };
+        fullExpertise = mkOption {
+          type = types.bool;
+          default = true;
+          description = "Whether to include the full content of expertise memories in AGENTS.md to preserve the agent's persona. Defaults to true.";
+        };
       };
     };
   };

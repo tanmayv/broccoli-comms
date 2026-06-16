@@ -1037,7 +1037,8 @@ agent_communicator_tui = "/config/agent-communicator"
             self.assertIn("Completed previous chain.", memory)
             self.assertIn("Embedded retained habits from durable memory", agents)
             self.assertIn("Review", agents)
-            self.assertIn("Run tests", agents)
+            self.assertNotIn("Run tests", agents)
+            self.assertIn("broccoli-comms memory show mem-habit", agents)
             self.assertIn("before completion, validation, review handoff", agents)
             self.assertNotIn("source: `" + str(context / "habits.md") + "`", agents)
             self.assertNotIn("secret detailed steps", agents)
@@ -1068,7 +1069,15 @@ agent_communicator_tui = "/config/agent-communicator"
     def test_bootstrap_agents_md_removes_habits_startup_read_instruction(self):
         with tempfile.TemporaryDirectory() as tmp:
             base = broccoli_comms_app.agent_contract("a", "a@s1", tmp)
-            agents = broccoli_comms_app._bootstrap_agents_md(base, Path(tmp), [], [{"memory_id": "mem-h", "type": "habit", "scope": "global", "title": "Always review", "body": "Send review handoff before done."}])
+            with mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": tmp, "XDG_CACHE_HOME": tmp, "XDG_RUNTIME_DIR": tmp}, clear=False):
+                config_dir = Path(tmp) / "broccoli-comms"
+                config_dir.mkdir(parents=True, exist_ok=True)
+                (config_dir / "config.toml").write_text("[agents_md]\nsummarize_memories = false\n")
+                by_type = {
+                    "skill": [],
+                    "habit": [{"memory_id": "mem-h", "type": "habit", "scope": "global", "title": "Always review", "body": "Send review handoff before done."}]
+                }
+                agents = broccoli_comms_app._bootstrap_agents_md(base, Path(tmp), by_type)
             self.assertNotIn("read generated `memory.md`, `habits.md`, and `expertise.md`", agents)
             self.assertNotIn("active records in `habits.md`", agents)
             self.assertNotIn("habits.md", agents)
@@ -1077,6 +1086,69 @@ agent_communicator_tui = "/config/agent-communicator"
             self.assertIn("Always review", agents)
             self.assertIn("Send review handoff before done.", agents)
             self.assertIn("mandatory operating instructions", agents)
+
+    def test_bootstrap_agents_md_respects_custom_static_sections_and_summarization(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config_dir = Path(tmp) / "broccoli-comms"
+            config_dir.mkdir(parents=True)
+            config_file = config_dir / "config.toml"
+            config_file.write_text("""
+[agents_md]
+static_sections = [
+  "# My Custom Rule\\nRun tests first.",
+  "## My Custom Rule 2\\nNo duplicate code."
+]
+summarize_memories = true
+full_expertise = false
+""")
+            with mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": tmp, "XDG_CACHE_HOME": tmp, "XDG_RUNTIME_DIR": tmp}, clear=False):
+                base = broccoli_comms_app.agent_contract("a", "a@s1", tmp, broccoli_comms_app.agent_contract_template())
+                self.assertIn("# My Custom Rule\nRun tests first.", base)
+                self.assertIn("## My Custom Rule 2\nNo duplicate code.", base)
+                self.assertNotIn("Critical persona: plan-first for non-specific work", base)
+
+                by_type = {
+                    "skill": [],
+                    "habit": [{"memory_id": "mem-h", "type": "habit", "scope": "global", "title": "Always review", "body": "details"}],
+                    "fact": [{"memory_id": "mem-f", "type": "fact", "scope": "project", "title": "Database Name", "body": "db_v1"}],
+                    "expertise": [{"memory_id": "mem-e", "type": "expertise", "scope": "global", "title": "System Design", "body": "architecture"}],
+                }
+                agents = broccoli_comms_app._bootstrap_agents_md(base, Path(tmp), by_type)
+                
+                self.assertIn("- **[Habit] Always review** (ID: `mem-h`) - To view in full, run: `broccoli-comms memory show mem-h`", agents)
+                self.assertIn("- **[Fact] Database Name** (ID: `mem-f`) - To view in full, run: `broccoli-comms memory show mem-f`", agents)
+                self.assertIn("- **[Expertise] System Design** (ID: `mem-e`) - To view in full, run: `broccoli-comms memory show mem-e`", agents)
+                
+                self.assertNotIn("details", agents)
+                self.assertNotIn("db_v1", agents)
+                self.assertNotIn("architecture", agents)
+
+    def test_bootstrap_agents_md_respects_full_rendering_and_full_expertise(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config_dir = Path(tmp) / "broccoli-comms"
+            config_dir.mkdir(parents=True)
+            config_file = config_dir / "config.toml"
+            config_file.write_text("""
+[agents_md]
+summarize_memories = false
+full_expertise = true
+""")
+            with mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": tmp, "XDG_CACHE_HOME": tmp, "XDG_RUNTIME_DIR": tmp}, clear=False):
+                base = broccoli_comms_app.agent_contract("a", "a@s1", tmp, broccoli_comms_app.agent_contract_template())
+                by_type = {
+                    "skill": [],
+                    "habit": [{"memory_id": "mem-h", "type": "habit", "scope": "global", "title": "Always review", "body": "details"}],
+                    "fact": [{"memory_id": "mem-f", "type": "fact", "scope": "project", "title": "Database Name", "body": "db_v1"}],
+                    "expertise": [{"memory_id": "mem-e", "type": "expertise", "scope": "global", "title": "System Design", "body": "architecture"}],
+                }
+                agents = broccoli_comms_app._bootstrap_agents_md(base, Path(tmp), by_type)
+                
+                self.assertIn("### Always review", agents)
+                self.assertIn("details", agents)
+                self.assertIn("### Database Name", agents)
+                self.assertIn("db_v1", agents)
+                self.assertIn("### System Design", agents)
+                self.assertIn("architecture", agents)
 
     def test_bootstrap_does_not_fall_back_to_unrelated_latest_chain_summary(self):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": tmp, "XDG_CACHE_HOME": tmp, "XDG_RUNTIME_DIR": tmp}, clear=False), mock.patch.object(broccoli_comms_app, "duplicate_profile_instances", return_value=[]):

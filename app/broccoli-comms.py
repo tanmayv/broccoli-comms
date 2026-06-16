@@ -194,6 +194,9 @@ def learning_kernel() -> LearningKernel:
 
 
 def agent_contract_template() -> str | None:
+    static_sections = get_toml_config("agents_md", "static_sections", [])
+    if static_sections:
+        return "\n\n---\n\n".join(static_sections)
     template = get_toml_config("learning", "agent_contract_template", None)
     if template:
         return str(template)
@@ -3085,7 +3088,7 @@ def _markdown_memory_list(title: str, records: list[dict]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _bootstrap_agents_md(base: str, path: Path, skills: list[dict], habits: list[dict] | None = None, rules_dir: Path | None = None, skills_dir: Path | None = None) -> str:
+def _bootstrap_agents_md(base: str, path: Path, by_type: dict[str, list[dict]], rules_dir: Path | None = None, skills_dir: Path | None = None) -> str:
     rules_root = rules_dir or path
     skills_root = skills_dir or (path / "skills")
     memory_path = rules_root / "memory.md"
@@ -3110,19 +3113,68 @@ def _bootstrap_agents_md(base: str, path: Path, skills: list[dict], habits: list
         "- Task/status/result changes auto-notify role-relevant participants: review/done -> reviewer/verifier when present otherwise coordinator/requester; bad/need_improvements -> assignee plus coordinator/requester with remediation next_step; good -> verifier when present otherwise coordinator/requester; validated -> assignee plus coordinator/requester and newly-ready dependents; ready -> assignee plus coordinator/requester; working -> coordinator/requester; blocked/archived -> assignee plus coordinator/requester. Suppress self-notifications, dedupe local/remote aliases for the same agent, and combine all applicable roles/reasons into one notification per recipient.",
         "- Ordinary single-task completion uses task/status/result flow, not `task submit-completion`: set a bounded result summary and move it to `review` when reviewer/verifier participants are active (or `done` when no review role is configured), then reviewers/users validate with `task mark-result`. Reserve `task submit-completion` for task-chain or scoped-phase completion only. Before submitting chain/scoped completion, refresh the bounded summary with `broccoli-comms task summarize-chain <task_chain_id> --json`, then submit the root with explicit `--task-chain-id` and `--root-task-id`; after approval/validation, run `summarize-chain` again so future agents resume from a bounded post-validation summary.",
     ]
+
+    summarize = get_toml_config("agents_md", "summarize_memories", True)
+    full_expertise = get_toml_config("agents_md", "full_expertise", True)
+
+    habits = by_type.get("habit") or []
     if habits:
         lines.extend(["", "## Embedded retained habits from durable memory", "These retained habits are mandatory operating instructions. Follow them across turns and before completion, validation, review handoff, or queue-continuation transitions."])
-        for mem in habits:
-            lines.extend([
-                "",
-                f"### {mem.get('title') or mem.get('memory_id')}",
-                f"- id: `{mem.get('memory_id')}`",
-                f"- type: `{mem.get('type')}`",
-                f"- scope: `{mem.get('scope')}`",
-            ])
-            if mem.get("source_task_id"):
-                lines.append(f"- source_task: `{mem.get('source_task_id')}`")
-            lines.extend(["", str(mem.get("body") or "").strip()])
+        if summarize:
+            for mem in habits:
+                lines.append(f"- **[Habit] {mem.get('title') or mem.get('memory_id')}** (ID: `{mem.get('memory_id')}`) - To view in full, run: `broccoli-comms memory show {mem.get('memory_id')}`")
+        else:
+            for mem in habits:
+                lines.extend([
+                    "",
+                    f"### {mem.get('title') or mem.get('memory_id')}",
+                    f"- id: `{mem.get('memory_id')}`",
+                    f"- type: `{mem.get('type')}`",
+                    f"- scope: `{mem.get('scope')}`",
+                ])
+                if mem.get("source_task_id"):
+                    lines.append(f"- source_task: `{mem.get('source_task_id')}`")
+                lines.extend(["", str(mem.get("body") or "").strip()])
+
+    facts = (by_type.get("fact") or []) + (by_type.get("episode") or [])
+    if facts:
+        lines.extend(["", "## Embedded facts and episodes from durable memory"])
+        if summarize:
+            for mem in facts:
+                lines.append(f"- **[{str(mem.get('type') or 'fact').capitalize()}] {mem.get('title') or mem.get('memory_id')}** (ID: `{mem.get('memory_id')}`) - To view in full, run: `broccoli-comms memory show {mem.get('memory_id')}`")
+        else:
+            for mem in facts:
+                lines.extend([
+                    "",
+                    f"### {mem.get('title') or mem.get('memory_id')}",
+                    f"- id: `{mem.get('memory_id')}`",
+                    f"- type: `{mem.get('type')}`",
+                    f"- scope: `{mem.get('scope')}`",
+                ])
+                if mem.get("source_task_id"):
+                    lines.append(f"- source_task: `{mem.get('source_task_id')}`")
+                lines.extend(["", str(mem.get("body") or "").strip()])
+
+    expertises = by_type.get("expertise") or []
+    if expertises:
+        lines.extend(["", "## Embedded expertise from durable memory"])
+        if full_expertise:
+            for mem in expertises:
+                lines.extend([
+                    "",
+                    f"### {mem.get('title') or mem.get('memory_id')}",
+                    f"- id: `{mem.get('memory_id')}`",
+                    f"- type: `{mem.get('type')}`",
+                    f"- scope: `{mem.get('scope')}`",
+                ])
+                if mem.get("source_task_id"):
+                    lines.append(f"- source_task: `{mem.get('source_task_id')}`")
+                lines.extend(["", str(mem.get("body") or "").strip()])
+        else:
+            for mem in expertises:
+                lines.append(f"- **[Expertise] {mem.get('title') or mem.get('memory_id')}** (ID: `{mem.get('memory_id')}`) - To view in full, run: `broccoli-comms memory show {mem.get('memory_id')}`")
+
+    skills = by_type.get("skill") or []
     if skills:
         lines.extend(["", "## Available skills from durable memory"])
         for mem in skills:
@@ -3188,7 +3240,7 @@ def write_bootstrap_context_files(payload: dict, context_dir: str | Path) -> dic
         target.write_text(f"---\nname: {skill_name}\ndescription: {desc}\n---\n\n{body}\n", encoding="utf-8")
         files.append(str(target))
     agents_target = path / "AGENTS.md"
-    agents_target.write_text(_bootstrap_agents_md(str(payload.get("agents_md") or ""), path, by_type["skill"], by_type["habit"], rules_dir=rules_dir, skills_dir=skills_dir), encoding="utf-8")
+    agents_target.write_text(_bootstrap_agents_md(str(payload.get("agents_md") or ""), path, by_type, rules_dir=rules_dir, skills_dir=skills_dir), encoding="utf-8")
     files.append(str(agents_target))
     return {"context_dir": str(path), "files": files}
 

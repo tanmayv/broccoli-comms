@@ -991,11 +991,40 @@ class TestLearningKernelCli(unittest.TestCase):
                 k.memory_approve(mem["memory"]["memory_id"], expected_version=mem["memory"]["version"])
             boot = k.memory_for_bootstrap(agent="b", scope="project:x")
             titles = {record["title"] for record in boot["records"]}
-            self.assertIn("Shared", titles)
+            self.assertNotIn("Shared", titles)
             self.assertIn("Own project", titles)
             self.assertNotIn("Other global", titles)
             self.assertNotIn("Other project", titles)
             self.assertNotIn("Wrong project", titles)
+
+    def test_memory_for_bootstrap_agent_filtering(self):
+        with tempfile.TemporaryDirectory() as tmp, self.env(tmp):
+            k = broccoli.learning_kernel()
+            task = k.task_create(title="good", assigned_agent="a", scope="project:x")
+            k.mark_result(task["task_id"], "good")
+            
+            # Scenario 1: Shared memory proposed by other agent (proposed_by="a", subject_agent=None) -> should be excluded for b
+            shared_other = k.memory_propose(type="fact", scope="global", title="Shared Other", body="body", source_task_id=task["task_id"], proposed_by="a")
+            
+            # Scenario 2: Shared memory proposed by target agent (proposed_by="b", subject_agent=None) -> should be included for b
+            shared_own = k.memory_propose(type="fact", scope="global", title="Shared Own", body="body", source_task_id=task["task_id"], proposed_by="b")
+            
+            # Scenario 3: Memory explicitly assigned to target agent (proposed_by="a", subject_agent="b") -> should be included for b
+            assigned_target = k.memory_propose(type="fact", scope="global", subject_agent="b", title="Assigned Target", body="body", source_task_id=task["task_id"], proposed_by="a")
+            
+            # Scenario 4: Memory explicitly assigned to other agent (proposed_by="b", subject_agent="a") -> should be excluded for b
+            assigned_other = k.memory_propose(type="fact", scope="global", subject_agent="a", title="Assigned Other", body="body", source_task_id=task["task_id"], proposed_by="b")
+
+            for mem in (shared_other, shared_own, assigned_target, assigned_other):
+                k.memory_approve(mem["memory"]["memory_id"], expected_version=mem["memory"]["version"])
+                
+            boot = k.memory_for_bootstrap(agent="b", scope="project:x")
+            titles = {record["title"] for record in boot["records"]}
+            
+            self.assertNotIn("Shared Other", titles)
+            self.assertIn("Shared Own", titles)
+            self.assertIn("Assigned Target", titles)
+            self.assertNotIn("Assigned Other", titles)
 
     def test_memory_expertise_constraints_and_bootstrap_limits(self):
         with tempfile.TemporaryDirectory() as tmp, self.env(tmp), mock.patch.object(broccoli.learning_kernel_module, "MEMORY_LIMITS", {**broccoli.learning_kernel_module.MEMORY_LIMITS, "bootstrap_max_records": 1, "bootstrap_max_body_chars_per_record": 5, "bootstrap_max_total_chars": 100}):
