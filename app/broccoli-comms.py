@@ -113,7 +113,7 @@ REVISION = os.environ.get("BROCCOLI_COMMS_REVISION", "unknown")
 
 def build_info() -> dict:
     return {"version": VERSION, "revision": REVISION, "display": f"{VERSION}+{REVISION}" if REVISION and REVISION != "unknown" else VERSION}
-SESSION = "broccoli-comms-agents"
+SESSION = get_toml_config("runner", "tmux_session", "broccoli-comms-agents")
 MANAGED_AGENT_OPTION = "@broccoli_managed_agent"
 SHELL_WINDOW_OPTION = "@broccoli_shell_window"
 UI_WINDOW_OPTION = "@broccoli_ui_window"

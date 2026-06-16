@@ -161,6 +161,7 @@
         tracker-unit = pkgs.runCommand "broccoli-comms-tracker-unit" { } ''
           cp -R ${./agent-tracker} agent-tracker
           chmod -R u+w agent-tracker
+          cp ${./app/learning_kernel.py} agent-tracker/learning_kernel.py
           cd agent-tracker
           ${pkgs.python3}/bin/python3 -m unittest test_tmux_util.py test_spin_command.py test_agent_tracker_ctl.py
           touch $out

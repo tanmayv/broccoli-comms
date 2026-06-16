@@ -132,6 +132,9 @@ let
       summarize_memories = cfg.config.agentsMd.summarizeMemories;
       full_expertise = cfg.config.agentsMd.fullExpertise;
     };
+    runner = compactAttrs {
+      tmux_session = cfg.config.runner.tmuxSession;
+    };
     providers = lib.mapAttrs (_: providerToml) cfg.config.providers;
   };
 
@@ -402,6 +405,13 @@ in {
           type = types.bool;
           default = true;
           description = "Whether to include the full content of expertise memories in AGENTS.md to preserve the agent's persona. Defaults to true.";
+        };
+      };
+      runner = {
+        tmuxSession = mkOption {
+          type = types.str;
+          default = "broccoli-comms-agents";
+          description = "The name of the tmux session where Broccoli Comms starts and manages agents. Defaults to \"broccoli-comms-agents\".";
         };
       };
     };

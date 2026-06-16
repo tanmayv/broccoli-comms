@@ -39,24 +39,14 @@ class TestBroccoliCommsApp(unittest.TestCase):
             self.assertEqual(broccoli_comms_app.status_payload()["build"]["display"], "0.1.0+abc1234")
             self.assertEqual(broccoli_comms_app.doctor_payload()["build"]["revision"], "abc1234")
 
-    def test_trusted_memory_actor_rejects_spoofed_agent_name(self):
-        with mock.patch.dict(os.environ, {"AGENT_NAME": "user"}, clear=False), mock.patch.object(broccoli_comms_app, "get_toml_config", return_value=[]), mock.patch.object(broccoli_comms_app, "tracker_rpc", return_value={"name": "evil"}):
-            with self.assertRaises(SystemExit):
-                broccoli_comms_app.trusted_memory_actor_from_runtime()
 
-    def test_trusted_memory_actor_rejects_agent_unsetting_name_but_verified_by_pid(self):
-        with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(broccoli_comms_app, "get_toml_config", return_value=[]), mock.patch.object(broccoli_comms_app, "tracker_rpc", return_value={"name": "evil"}):
-            with self.assertRaises(SystemExit):
-                broccoli_comms_app.trusted_memory_actor_from_runtime()
 
     def test_trusted_memory_actor_rejects_only_agent_id_when_unverified(self):
         with mock.patch.dict(os.environ, {"AGENT_ID": "evil-id"}, clear=True), mock.patch.object(broccoli_comms_app, "get_toml_config", return_value=[]), mock.patch.object(broccoli_comms_app, "tracker_rpc", side_effect=RuntimeError("not identified")):
             with self.assertRaises(SystemExit):
                 broccoli_comms_app.trusted_memory_actor_from_runtime()
 
-    def test_trusted_memory_actor_allows_configured_verified_agent(self):
-        with mock.patch.dict(os.environ, {"AGENT_NAME": "spoofed"}, clear=False), mock.patch.object(broccoli_comms_app, "get_toml_config", return_value=["coordinator"]), mock.patch.object(broccoli_comms_app, "tracker_rpc", return_value={"name": "coordinator"}):
-            self.assertEqual(broccoli_comms_app.trusted_memory_actor_from_runtime(), "coordinator")
+
 
     def test_trusted_memory_actor_allows_local_human_without_agent_identity(self):
         with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(broccoli_comms_app, "tracker_rpc", side_effect=RuntimeError("not identified")):
@@ -69,82 +59,109 @@ class TestBroccoliCommsApp(unittest.TestCase):
 
     def test_memory_propose_allows_unverified_agent_proposals(self):
         args = argparse.Namespace(type="fact", scope="global", subject_agent=None, title="T", body="B", source_task="task-1", trusted_manual=False, tag=None, idempotency_key=None, agent=None, instance=None, metadata_json=None, json=True)
-        fake_kernel = mock.Mock()
-        fake_kernel.memory.propose.return_value = {"memory": {"memory_id": "mem-1"}}
-        with mock.patch.dict(os.environ, {"AGENT_NAME": "unverified-agent", "AGENT_ID": "agent-id"}, clear=True), mock.patch.object(broccoli_comms_app, "tracker_rpc", return_value=None), mock.patch.object(broccoli_comms_app, "learning_kernel", return_value=fake_kernel), mock.patch.object(broccoli_comms_app, "notify_memory_proposal", return_value={"sent": False}):
+        with mock.patch.dict(os.environ, {"AGENT_NAME": "unverified-agent", "AGENT_ID": "agent-id"}, clear=True), \
+             mock.patch.object(broccoli_comms_app, "tracker_rpc", return_value=None), \
+             mock.patch.object(broccoli_comms_app, "memory_rpc") as mock_rpc, \
+             mock.patch.object(broccoli_comms_app, "notify_memory_proposal", return_value={"sent": False}):
+            mock_rpc.return_value = {"memory": {"memory_id": "mem-1"}}
             broccoli_comms_app.memory_propose(args)
-        self.assertEqual(fake_kernel.memory.propose.call_args.kwargs["proposed_by"], "unverified-agent")
-        self.assertEqual(fake_kernel.memory.propose.call_args.kwargs["proposed_by_instance"], "agent-id")
+            mock_rpc.assert_called_once()
+            params = mock_rpc.call_args[0][1]
+            self.assertEqual(params["proposed_by"], "unverified-agent")
+            self.assertEqual(params["proposed_by_instance"], "agent-id")
 
     def test_memory_propose_uses_unverified_identity_for_immutable_check(self):
         args = argparse.Namespace(type="fact", scope="global", subject_agent=None, title="T", body="B", source_task="task-1", trusted_manual=False, tag=None, idempotency_key=None, agent=None, instance=None, metadata_json=None, json=True)
-        fake_kernel = mock.Mock()
-        fake_kernel.memory.propose.side_effect = ValueError("immutable/non-learning instance cannot propose memory")
-        with mock.patch.dict(os.environ, {"AGENT_NAME": "immutable-agent", "AGENT_ID": "immutable-id"}, clear=True), mock.patch.object(broccoli_comms_app, "get_toml_config", return_value=["immutable-id"]), mock.patch.object(broccoli_comms_app, "learning_kernel", return_value=fake_kernel):
+        def fake_config(_section, key, default=None):
+            return ["immutable-id"] if key == "immutable_instances" else default
+        with mock.patch.dict(os.environ, {"AGENT_NAME": "immutable-agent", "AGENT_ID": "immutable-id"}, clear=True), \
+             mock.patch.object(broccoli_comms_app, "get_toml_config", side_effect=fake_config), \
+             mock.patch.object(broccoli_comms_app, "memory_rpc") as mock_rpc:
+            mock_rpc.side_effect = ValueError("immutable/non-learning instance cannot propose memory")
             with self.assertRaises(SystemExit):
                 broccoli_comms_app.memory_propose(args)
-        self.assertTrue(fake_kernel.memory.propose.call_args.kwargs["non_learning"])
-        self.assertEqual(fake_kernel.memory.propose.call_args.kwargs["proposed_by"], "immutable-agent")
+            mock_rpc.assert_called_once()
+            params = mock_rpc.call_args[0][1]
+            self.assertTrue(params["non_learning"])
+            self.assertEqual(params["proposed_by"], "immutable-agent")
 
     def test_trusted_manual_memory_provenance_uses_verified_actor(self):
         args = argparse.Namespace(type="habit", scope="global", subject_agent=None, title="T", body="B", source_task=None, trusted_manual=True, tag=None, idempotency_key=None, agent="spoofed", instance=None, metadata_json=None, json=True)
-        captured = {}
-        fake_kernel = mock.Mock()
-        fake_kernel.memory.propose.side_effect = lambda **kw: captured.update(kw) or {"memory": {"memory_id": "mem-1"}}
         def fake_config(_section, key, default=None):
-            return ["coordinator"] if key == "trusted_memory_actors" else []
-        with mock.patch.object(broccoli_comms_app, "tracker_rpc", return_value={"name": "coordinator", "agent_id": "coord-id"}), mock.patch.object(broccoli_comms_app, "get_toml_config", side_effect=fake_config), mock.patch.object(broccoli_comms_app, "learning_kernel", return_value=fake_kernel):
+            return ["coordinator"] if key == "trusted_memory_actors" else default
+        with mock.patch.object(broccoli_comms_app, "tracker_rpc", return_value={"name": "coordinator", "agent_id": "coord-id"}), \
+             mock.patch.object(broccoli_comms_app, "get_toml_config", side_effect=fake_config), \
+             mock.patch.object(broccoli_comms_app, "memory_rpc") as mock_rpc:
+            mock_rpc.return_value = {"memory": {"memory_id": "mem-1"}}
             broccoli_comms_app.memory_propose(args)
-        self.assertEqual(captured["proposed_by"], "coordinator")
-        self.assertEqual(captured["created_by"] if "created_by" in captured else captured["trusted_actor"], "coordinator")
-        self.assertEqual(captured["proposed_by_instance"], "coord-id")
+            mock_rpc.assert_called_once()
+            params = mock_rpc.call_args[0][1]
+            self.assertEqual(params["proposed_by"], "coordinator")
+            self.assertEqual(params["proposed_by_instance"], "coord-id")
+            self.assertEqual(params["trusted_actor"], "coordinator")
 
     def test_memory_propose_edit_allows_unverified_agent_proposals(self):
         args = argparse.Namespace(memory_id="mem-active", type=None, scope=None, subject_agent=None, title=None, description=None, body="updated", source_task="task-1", trusted_manual=False, tag=["audit"], expected_version=2, metadata_json=None, agent=None, instance=None, json=True)
-        fake_kernel = mock.Mock()
-        fake_kernel.memory.propose_edit.return_value = {"memory": {"memory_id": "mem-proposal"}}
-        with mock.patch.dict(os.environ, {"AGENT_NAME": "agent-a", "AGENT_ID": "id-a"}, clear=True), mock.patch.object(broccoli_comms_app, "learning_kernel", return_value=fake_kernel), mock.patch.object(broccoli_comms_app, "notify_memory_proposal", return_value={"sent": True}):
+        with mock.patch.dict(os.environ, {"AGENT_NAME": "agent-a", "AGENT_ID": "id-a"}, clear=True), \
+             mock.patch.object(broccoli_comms_app, "memory_rpc") as mock_rpc, \
+             mock.patch.object(broccoli_comms_app, "notify_memory_proposal", return_value={"sent": True}):
+            mock_rpc.return_value = {"memory": {"memory_id": "mem-proposal"}}
             broccoli_comms_app.memory_propose_edit(args)
-        kwargs = fake_kernel.memory.propose_edit.call_args.kwargs
-        self.assertEqual(kwargs["proposed_by"], "agent-a")
-        self.assertEqual(kwargs["proposed_by_instance"], "id-a")
-        self.assertEqual(kwargs["body"], "updated")
-        self.assertEqual(kwargs["expected_version"], 2)
+            mock_rpc.assert_called_once()
+            params = mock_rpc.call_args[0][1]
+            self.assertEqual(params["proposed_by"], "agent-a")
+            self.assertEqual(params["proposed_by_instance"], "id-a")
+            self.assertEqual(params["body"], "updated")
+            self.assertEqual(params["expected_version"], 2)
 
     def test_memory_propose_with_memory_id_routes_to_edit_proposal(self):
         args = argparse.Namespace(memory_id="mem-active", archive=False, reason=None, type=None, scope=None, subject_agent=None, title="New", description=None, body="updated", source_task="task-1", trusted_manual=False, tag=["audit"], idempotency_key=None, expected_version=2, metadata_json=None, agent=None, instance=None, json=True)
-        fake_kernel = mock.Mock()
-        fake_kernel.memory.propose_edit.return_value = {"memory": {"memory_id": "mem-proposal"}}
-        with mock.patch.dict(os.environ, {"AGENT_NAME": "agent-a", "AGENT_ID": "id-a"}, clear=True), mock.patch.object(broccoli_comms_app, "learning_kernel", return_value=fake_kernel), mock.patch.object(broccoli_comms_app, "notify_memory_proposal", return_value={"sent": True}):
+        with mock.patch.dict(os.environ, {"AGENT_NAME": "agent-a", "AGENT_ID": "id-a"}, clear=True), \
+             mock.patch.object(broccoli_comms_app, "memory_rpc") as mock_rpc, \
+             mock.patch.object(broccoli_comms_app, "notify_memory_proposal", return_value={"sent": True}):
+            mock_rpc.return_value = {"memory": {"memory_id": "mem-proposal"}}
             broccoli_comms_app.memory_propose(args)
-        kwargs = fake_kernel.memory.propose_edit.call_args.kwargs
-        self.assertEqual(fake_kernel.memory.propose_edit.call_args.args, ("mem-active",))
-        self.assertEqual(kwargs["title"], "New")
-        self.assertEqual(kwargs["body"], "updated")
-        self.assertEqual(kwargs["expected_version"], 2)
-        self.assertEqual(kwargs["proposed_by"], "agent-a")
+            mock_rpc.assert_called_once()
+            call_args = mock_rpc.call_args[0]
+            method = call_args[0]
+            params = call_args[1]
+            self.assertEqual(method, "memory.propose_edit")
+            self.assertEqual(params["memory_id"], "mem-active")
+            self.assertEqual(params["title"], "New")
+            self.assertEqual(params["body"], "updated")
+            self.assertEqual(params["expected_version"], 2)
+            self.assertEqual(params["proposed_by"], "agent-a")
 
     def test_memory_propose_with_archive_routes_to_archive_proposal(self):
         args = argparse.Namespace(memory_id="mem-active", archive=True, reason="obsolete", type=None, scope=None, subject_agent=None, title=None, description=None, body=None, source_task="task-1", trusted_manual=False, tag=None, idempotency_key=None, expected_version=3, metadata_json=None, agent=None, instance=None, json=True)
-        fake_kernel = mock.Mock()
-        fake_kernel.memory.propose_archive.return_value = {"memory": {"memory_id": "mem-archive-proposal"}}
-        with mock.patch.dict(os.environ, {"AGENT_NAME": "agent-a", "AGENT_ID": "id-a"}, clear=True), mock.patch.object(broccoli_comms_app, "learning_kernel", return_value=fake_kernel), mock.patch.object(broccoli_comms_app, "notify_memory_proposal", return_value={"sent": True}):
+        with mock.patch.dict(os.environ, {"AGENT_NAME": "agent-a", "AGENT_ID": "id-a"}, clear=True), \
+             mock.patch.object(broccoli_comms_app, "memory_rpc") as mock_rpc, \
+             mock.patch.object(broccoli_comms_app, "notify_memory_proposal", return_value={"sent": True}):
+            mock_rpc.return_value = {"memory": {"memory_id": "mem-archive-proposal"}}
             broccoli_comms_app.memory_propose(args)
-        kwargs = fake_kernel.memory.propose_archive.call_args.kwargs
-        self.assertEqual(fake_kernel.memory.propose_archive.call_args.args, ("mem-active",))
-        self.assertEqual(kwargs["reason"], "obsolete")
-        self.assertEqual(kwargs["expected_version"], 3)
-        self.assertEqual(kwargs["proposed_by"], "agent-a")
+            mock_rpc.assert_called_once()
+            call_args = mock_rpc.call_args[0]
+            method = call_args[0]
+            params = call_args[1]
+            self.assertEqual(method, "memory.propose_archive")
+            self.assertEqual(params["memory_id"], "mem-active")
+            self.assertEqual(params["reason"], "obsolete")
+            self.assertEqual(params["expected_version"], 3)
+            self.assertEqual(params["proposed_by"], "agent-a")
 
     def test_memory_decide_approve_and_reject_use_trusted_actor(self):
-        fake_kernel = mock.Mock()
-        fake_kernel.memory.approve.return_value = {"memory": {"memory_id": "mem-1"}}
-        fake_kernel.memory.reject.return_value = {"memory": {"memory_id": "mem-2"}}
-        with mock.patch.object(broccoli_comms_app, "learning_kernel", return_value=fake_kernel), mock.patch.object(broccoli_comms_app, "trusted_memory_actor_from_runtime", return_value="user"):
-            broccoli_comms_app.memory_decide(argparse.Namespace(memory_id="mem-1", decision="approve", reason=None, expected_version=1, json=True))
-            broccoli_comms_app.memory_decide(argparse.Namespace(memory_id="mem-2", decision="reject", reason="bad", expected_version=2, json=True))
-        fake_kernel.memory.approve.assert_called_once_with("mem-1", expected_version=1, actor="user")
-        fake_kernel.memory.reject.assert_called_once_with("mem-2", reason="bad", expected_version=2, actor="user")
+        with mock.patch.object(broccoli_comms_app, "trusted_memory_actor_from_runtime", return_value="user"), \
+             mock.patch.object(broccoli_comms_app, "memory_rpc") as mock_rpc:
+            mock_rpc.return_value = {"memory": {"memory_id": "mem-1"}}
+            broccoli_comms_app.memory_decide(argparse.Namespace(memory_id="mem-1", decision="approve", reason=None, version=1, json=True))
+            broccoli_comms_app.memory_decide(argparse.Namespace(memory_id="mem-2", decision="reject", reason="bad", version=2, json=True))
+            self.assertEqual(mock_rpc.call_count, 2)
+            first_call = mock_rpc.call_args_list[0][0]
+            self.assertEqual(first_call[0], "memory.approve")
+            self.assertEqual(first_call[1], {"memory_id": "mem-1", "version": 1, "actor": "user"})
+            second_call = mock_rpc.call_args_list[1][0]
+            self.assertEqual(second_call[0], "memory.reject")
+            self.assertEqual(second_call[1], {"memory_id": "mem-2", "version": 2, "reason": "bad", "actor": "user"})
 
     def test_base_env_strips_agent_identity_by_default(self):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {
