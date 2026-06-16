@@ -51,6 +51,12 @@ def _read_and_update_inbox_file(
                             pass
 
             def matches_filters(msg):
+                # Task updates are system-level UI notifications, not a normal
+                # peer conversation.  Include them even when the TUI requests a
+                # focused sender conversation so task cards remain visible in
+                # simple chat while ordinary messages stay sender-filtered.
+                if _is_task_update_message(msg):
+                    return True
                 if sender_agent_id and msg.get("sender_agent_id") != sender_agent_id:
                     return False
                 if sender_tracker_id:

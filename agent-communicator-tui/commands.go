@@ -254,7 +254,7 @@ func filterConversation(messages []tracker.Message, row agentRow) []tracker.Mess
 	}
 	filtered := []tracker.Message{}
 	for _, msg := range messages {
-		if messageMatchesRow(msg, row) {
+		if isTaskUpdateMessage(msg) || messageMatchesRow(msg, row) {
 			filtered = append(filtered, msg)
 		}
 	}

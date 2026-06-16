@@ -665,6 +665,17 @@ func TestLoadInboxAvoidsExactSenderFilterForLegacyRemoteRows(t *testing.T) {
 	}
 }
 
+func TestFilterConversationKeepsTaskUpdatesAcrossFocusedRows(t *testing.T) {
+	messages := []tracker.Message{
+		{Sender: "other", Body: "not selected"},
+		{Sender: "task-kernel", Body: "Task task-1 moved", Kind: "task_update", ContentType: taskUpdateContentType, TaskID: "task-1"},
+	}
+	filtered := filterConversation(messages, agentRow{Name: "alpha", Scope: "local"})
+	if len(filtered) != 1 || filtered[0].TaskID != "task-1" {
+		t.Fatalf("filtered = %+v", filtered)
+	}
+}
+
 func TestFilterConversationMatchesRemoteSenderFormat(t *testing.T) {
 	messages := []tracker.Message{{Sender: "zv2-bmod-agent (via tanmayvijay.c.googlers.com)", Body: "remote"}, {Sender: "other (via tanmayvijay.c.googlers.com)", Body: "other"}}
 	row := agentRow{Name: "tanma/zv2-bmod-agent", Scope: "remote", Hostname: "tanmayvijay.c.googlers.com", AgentName: "zv2-bmod-agent", TargetAddress: "tanmayvijay.c.googlers.com/zv2-bmod-agent"}

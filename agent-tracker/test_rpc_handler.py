@@ -1043,9 +1043,10 @@ class TestRpcHandler(unittest.TestCase):
                 f.write(json.dumps({"sender": "alpha", "sender_agent_id": "alpha-id", "sender_tracker_id": "remote-tracker", "message": "remote", "read": False, "message_id": "m2"}) + "\n")
                 f.write(json.dumps({"sender": "alpha", "sender_agent_id": "alpha-id", "message": "legacy local", "read": False, "message_id": "m3"}) + "\n")
                 f.write(json.dumps({"sender": "beta", "sender_agent_id": "beta-id", "message": "b", "read": False, "message_id": "m4"}) + "\n")
+                f.write(json.dumps({"sender": "task-kernel", "sender_agent_id": "task-id", "message": "Task update", "read": False, "message_id": "m5", "kind": "task_update", "content_type": "application/vnd.broccoli.task-update+json", "task_id": "task-1"}) + "\n")
 
             result = rpc_handler.handle_get_inbox({"agent_name": "agent1", "sender_agent_id": "alpha-id", "sender_tracker_id": registry_client.TRACKER_ID})
-            self.assertEqual([m["message_id"] for m in result["messages"]], ["m1", "m3"])
+            self.assertEqual([m["message_id"] for m in result["messages"]], ["m1", "m3", "m5"])
 
             with open(inbox_path, "r") as f:
                 stored = [json.loads(line) for line in f if line.strip()]
@@ -1053,7 +1054,8 @@ class TestRpcHandler(unittest.TestCase):
             self.assertFalse(stored[1]["read"])
             self.assertTrue(stored[2]["read"])
             self.assertFalse(stored[3]["read"])
-            self.assertEqual(publish_event.call_count, 2)
+            self.assertTrue(stored[4]["read"])
+            self.assertEqual(publish_event.call_count, 3)
         finally:
             if os.path.exists(inbox_path):
                 os.remove(inbox_path)
