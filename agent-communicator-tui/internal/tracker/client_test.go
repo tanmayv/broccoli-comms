@@ -225,7 +225,7 @@ func TestSendMessageUsesAgentNameForPlainLocalTarget(t *testing.T) {
 			t.Fatalf("method = %s, want send_message", req.Method)
 		}
 		params := req.Params.(map[string]any)
-		if params["agent_name"] != "alpha" || params["target_address"] != nil || params["agent_id"] != nil {
+		if params["agent_name"] != "alpha" || params["target_address"] != nil || params["agent_id"] != nil || params["interrupt"] != true {
 			t.Fatalf("params = %+v", params)
 		}
 		return true
@@ -238,7 +238,7 @@ func TestSendMessageUsesAgentNameForPlainLocalTarget(t *testing.T) {
 func TestSendMessageUsesTargetAddressForHostQualifiedTarget(t *testing.T) {
 	client := fakeClient(t, func(req rpcRequest) any {
 		params := req.Params.(map[string]any)
-		if params["target_address"] != "host/alpha" || params["agent_name"] != nil {
+		if params["target_address"] != "host/alpha" || params["agent_name"] != nil || params["interrupt"] != true {
 			t.Fatalf("params = %+v", params)
 		}
 		return true
@@ -251,7 +251,7 @@ func TestSendMessageUsesTargetAddressForHostQualifiedTarget(t *testing.T) {
 func TestSendMessageFromIncludesSenderName(t *testing.T) {
 	client := fakeClient(t, func(req rpcRequest) any {
 		params := req.Params.(map[string]any)
-		if params["sender_name"] != "agent-communicator" || params["agent_name"] != "alpha" {
+		if params["sender_name"] != "agent-communicator" || params["agent_name"] != "alpha" || params["interrupt"] != true {
 			t.Fatalf("params = %+v", params)
 		}
 		return true
@@ -264,7 +264,7 @@ func TestSendMessageFromIncludesSenderName(t *testing.T) {
 func TestSendMessageWithContextIncludesSwarmContext(t *testing.T) {
 	client := fakeClient(t, func(req rpcRequest) any {
 		params := req.Params.(map[string]any)
-		if params["sender_name"] != "agent-communicator" || params["agent_name"] != "planner" || params["message_id"] != "sent-1" || params["swarm_context"] != "backend-fix" {
+		if params["sender_name"] != "agent-communicator" || params["agent_name"] != "planner" || params["message_id"] != "sent-1" || params["swarm_context"] != "backend-fix" || params["interrupt"] != true {
 			t.Fatalf("params = %+v", params)
 		}
 		return true
@@ -278,7 +278,7 @@ func TestSendMessageUsesLocalTargetAddressForUUIDTarget(t *testing.T) {
 	target := "123e4567-e89b-12d3-a456-426614174000"
 	client := fakeClient(t, func(req rpcRequest) any {
 		params := req.Params.(map[string]any)
-		if params["target_address"] != "local/"+target || params["agent_id"] != nil {
+		if params["target_address"] != "local/"+target || params["agent_id"] != nil || params["interrupt"] != true {
 			t.Fatalf("params = %+v", params)
 		}
 		return true
@@ -401,5 +401,22 @@ func TestRPCErrorPreservesRawStringAndStructuredData(t *testing.T) {
 	rpcErr, ok := err.(*RPCError)
 	if !ok || rpcErr.Data == nil || rpcErr.Data.ErrorCode != "agent_not_found" || !rpcErr.Data.Retryable {
 		t.Fatalf("rpc error = %#v", err)
+	}
+}
+
+func TestRequestStopCallsRPC(t *testing.T) {
+	client := fakeClient(t, func(req rpcRequest) any {
+		if req.Method != "request_stop" {
+			t.Fatalf("method = %s, want request_stop", req.Method)
+		}
+		params := req.Params.(map[string]any)
+		if params["target_address"] != "alpha" || params["timeout"] != "20s" || params["force"] != false {
+			t.Fatalf("params = %+v", params)
+		}
+		return true
+	})
+	success, err := client.RequestStop(context.Background(), "alpha", "20s", false)
+	if err != nil || !success {
+		t.Fatalf("RequestStop: success=%t, err=%v", success, err)
 	}
 }

@@ -720,6 +720,12 @@ func (m model) handleComposerSubmit() (model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		if action.Kind == "restart" {
+			m.composer = nil
+			m.directInputStatus = fmt.Sprintf("Triggering graceful restart for %s (timeout %s)...", row.Name, action.Timeout)
+			m.directInputStatusErr = false
+			return m, restartAgentCmd(m.local, rowTarget(row), action.Timeout)
+		}
 		if action.Kind == "broadcast" {
 			m.directInputStatus = "Broadcast mode is disabled in this milestone; no message was sent"
 			m.directInputStatusErr = true

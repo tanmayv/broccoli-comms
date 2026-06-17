@@ -338,6 +338,7 @@ func (c *Client) SendMessageWithID(ctx context.Context, senderName, target, body
 
 func (c *Client) SendMessageWithContext(ctx context.Context, senderName, target, body, messageID, swarmContext string, attachments []Attachment) error {
 	params := map[string]any{"message": body}
+	params["interrupt"] = true
 	if senderName != "" {
 		params["sender_name"] = senderName
 	}
@@ -547,5 +548,16 @@ func (c *Client) MemoryRevoke(ctx context.Context, memoryID string, reason strin
 	}
 	var result MemoryResult
 	err := c.call(ctx, "memory.revoke", params, 5*time.Second, &result)
+	return result, err
+}
+
+func (c *Client) RequestStop(ctx context.Context, target string, timeout string, force bool) (bool, error) {
+	params := map[string]any{
+		"target_address": target,
+		"timeout":        timeout,
+		"force":          force,
+	}
+	var result bool
+	err := c.call(ctx, "request_stop", params, 10*time.Second, &result)
 	return result, err
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -135,6 +136,18 @@ func (m model) handleSwarmAssigned(msg swarmAssigned) (model, tea.Cmd) {
 	m.directInputStatus = "Created swarm " + msg.Result.Swarm + " from live agents"
 	m.directInputStatusErr = false
 	return m, tea.Batch(loadAgents(m.local), loadSelectedSwarmTimeline(m.local, m.selectedSwarmName()))
+}
+
+func (m model) handleRestartRequested(msg restartRequested) (model, tea.Cmd) {
+	m.err = msg.Err
+	if msg.Err != nil {
+		m.directInputStatus = "Restart request failed: " + msg.Err.Error()
+		m.directInputStatusErr = true
+	} else {
+		m.directInputStatus = "Graceful restart triggered for " + msg.Target + " (timeout " + msg.Timeout + ")"
+		m.directInputStatusErr = false
+	}
+	return m, tea.Tick(4*time.Second, func(time.Time) tea.Msg { return clearDirectInputStatusTick{} })
 }
 
 func (m model) handleMessageSent(msg messageSent) (model, tea.Cmd) {

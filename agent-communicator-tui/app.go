@@ -249,6 +249,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleSwarmTimelineLoaded(msg)
 	case swarmAssigned:
 		return m.handleSwarmAssigned(msg)
+	case restartRequested:
+		return m.handleRestartRequested(msg)
 	case messageSent:
 		return m.handleMessageSent(msg)
 	case eventsLoaded:

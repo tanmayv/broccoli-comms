@@ -28,6 +28,10 @@ type fakeLocal struct {
 	sentID                string
 	sentSwarmContext      string
 	sendErr               error
+	restartTarget         string
+	restartTimeout        string
+	restartForce          bool
+	restartErr            error
 	directText            string
 	directSubmit          bool
 	directKeys            []string
@@ -51,6 +55,12 @@ type fakeLocal struct {
 func (f *fakeLocal) EnsureMailbox(_ context.Context, agentName string) (tracker.EnsureMailboxResult, error) {
 	f.ensureName = agentName
 	return tracker.EnsureMailboxResult{Name: agentName, AgentID: "mailbox-id", UUID: "mailbox-id"}, f.ensureErr
+}
+func (f *fakeLocal) RequestStop(_ context.Context, target string, timeout string, force bool) (bool, error) {
+	f.restartTarget = target
+	f.restartTimeout = timeout
+	f.restartForce = force
+	return f.restartErr == nil, f.restartErr
 }
 func (f *fakeLocal) TrackerInfo(context.Context) (tracker.TrackerInfo, error) {
 	return tracker.TrackerInfo{Status: "ok", AgentCount: len(f.agents), OnlineAgentCount: len(f.agents)}, nil
@@ -303,6 +313,71 @@ func TestComposerAcceptsUnicodeBackspaceAndEnterSends(t *testing.T) {
 	}
 	if local.sentTo != "alpha" || local.sentBody != "héq\n\n(PS: Reply in markdown format.)" {
 		t.Fatalf("sent target/body = %q/%q", local.sentTo, local.sentBody)
+	}
+}
+
+func TestComposerRestartCommand(t *testing.T) {
+	local := &fakeLocal{}
+	m := model{
+		rows: []agentRow{{Name: "alpha", Scope: "local"}},
+		local: local,
+	}
+
+	// 1. Test /restart with default timeout (20s)
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/restart")})
+	m = updated.(model)
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(model)
+
+	if string(m.composer) != "" {
+		t.Fatalf("expected composer to be cleared, got %q", string(m.composer))
+	}
+	if !strings.Contains(m.directInputStatus, "Triggering graceful restart for alpha (timeout 20s)") {
+		t.Fatalf("unexpected status: %q", m.directInputStatus)
+	}
+	if cmd == nil {
+		t.Fatalf("expected a non-nil tea.Cmd")
+	}
+	msg := cmd()
+	req, ok := msg.(restartRequested)
+	if !ok {
+		t.Fatalf("expected restartRequested msg, got %#v", msg)
+	}
+	if req.Err != nil {
+		t.Fatalf("restart failed: %v", req.Err)
+	}
+	if local.restartTarget != "alpha" || local.restartTimeout != "20s" || local.restartForce != false {
+		t.Fatalf("unexpected mock calls: target=%q timeout=%q force=%t", local.restartTarget, local.restartTimeout, local.restartForce)
+	}
+
+	// 2. Test /restart with custom timeout (15s)
+	local = &fakeLocal{}
+	m = model{
+		rows: []agentRow{{Name: "alpha", Scope: "local"}},
+		local: local,
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/restart 15")})
+	m = updated.(model)
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(model)
+
+	if cmd == nil {
+		t.Fatalf("expected a non-nil tea.Cmd")
+	}
+	msg = cmd()
+	req, ok = msg.(restartRequested)
+	if !ok || req.Err != nil {
+		t.Fatalf("restart failed or wrong msg: %#v", msg)
+	}
+	if local.restartTarget != "alpha" || local.restartTimeout != "15s" || local.restartForce != false {
+		t.Fatalf("unexpected mock calls: target=%q timeout=%q force=%t", local.restartTarget, local.restartTimeout, local.restartForce)
+	}
+
+	// 3. Test handleRestartRequested updates model status
+	updated, cmd = m.Update(req)
+	m = updated.(model)
+	if m.directInputStatus != "Graceful restart triggered for alpha (timeout 15s)" || m.directInputStatusErr {
+		t.Fatalf("unexpected status after update: %q (err=%t)", m.directInputStatus, m.directInputStatusErr)
 	}
 }
 

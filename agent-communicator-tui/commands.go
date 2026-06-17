@@ -44,6 +44,7 @@ type localClient interface {
 	MemoryEdit(ctx context.Context, params map[string]any) (tracker.MemoryResult, error)
 	MemoryRollback(ctx context.Context, memoryID string, targetVersion, expectedVersion int, actor string) (tracker.MemoryResult, error)
 	MemoryRevoke(ctx context.Context, memoryID string, reason string, expectedVersion int, actor string) (tracker.MemoryResult, error)
+	RequestStop(ctx context.Context, target string, timeout string, force bool) (bool, error)
 }
 
 type messageIDSender interface {
@@ -355,6 +356,7 @@ type composerAction struct {
 	SwarmName  string
 	MainAgent  string
 	Subagents  []string
+	Timeout    string
 	Original   string
 }
 
@@ -478,7 +480,32 @@ func parseComposerAction(input string) composerAction {
 		rest := strings.TrimSpace(strings.TrimPrefix(trimmed, "/broadcast"))
 		return composerAction{Kind: "broadcast", Body: rest, Original: input}
 	}
+	if trimmed == "/restart" {
+		return composerAction{Kind: "restart", Timeout: "20s", Original: input}
+	}
+	if strings.HasPrefix(trimmed, "/restart ") {
+		rest := strings.TrimSpace(strings.TrimPrefix(trimmed, "/restart"))
+		timeout := rest
+		if timeout == "" {
+			timeout = "20s"
+		} else if isPureNumber(timeout) {
+			timeout = timeout + "s"
+		}
+		return composerAction{Kind: "restart", Timeout: timeout, Original: input}
+	}
 	return action
+}
+
+func isPureNumber(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func firstField(value string) string {
@@ -515,6 +542,24 @@ func assignSwarmCmd(local localClient, swarmName, main string, subagents []strin
 		defer cancel()
 		result, err := local.AssignSwarm(ctx, swarmName, main, subagents)
 		return swarmAssigned{Result: result, Err: err}
+	}
+}
+
+type restartRequested struct {
+	Target  string
+	Timeout string
+	Err     error
+}
+
+func restartAgentCmd(local localClient, target string, timeout string) tea.Cmd {
+	return func() tea.Msg {
+		if local == nil {
+			return restartRequested{Target: target, Timeout: timeout, Err: errors.New("local tracker client unavailable")}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		_, err := local.RequestStop(ctx, target, timeout, false)
+		return restartRequested{Target: target, Timeout: timeout, Err: err}
 	}
 }
 
