@@ -28,6 +28,7 @@
               runHook preInstall
               mkdir -p $out
               cp -R . $out/
+              cp ${./app/learning_kernel.py} $out/learning_kernel.py
               runHook postInstall
             '';
           };
