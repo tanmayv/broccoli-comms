@@ -228,7 +228,7 @@ in {
           { if-shell -F '#{m:agent:*,#{mouse_status_range}}' \
               { 
                   # Extract pane_id from agent:pane_id
-                  run-shell "target_id=\$(echo '#{mouse_status_range}' | cut -d: -f2); \
+                  run-shell "target_id=$(echo '#{mouse_status_range}' | cut -d: -f2); \
                              if tmux list-panes -a -F '##{pane_id}' | grep -q \"^\$target_id\$\"; then \
                                  tmux switch-client -t \"\$target_id\"; \
                                  tmux select-pane -t \"\$target_id\"; \
