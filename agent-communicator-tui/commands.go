@@ -195,7 +195,7 @@ func ensureMailboxCmd(local localClient, ownName string) tea.Cmd {
 		if local == nil || strings.TrimSpace(ownName) == "" {
 			return mailboxEnsured{}
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		_, err := local.EnsureMailbox(ctx, ownName)
 		return mailboxEnsured{Err: err}
@@ -214,7 +214,7 @@ func loadInbox(local localClient, inboxOwner string, row agentRow) tea.Cmd {
 		if owner == "" {
 			return inboxLoaded{}
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		senderAgentID, senderTrackerID, senderName := rowInboxFilters(row)
 		inbox, err := local.ReadInboxForSender(ctx, owner, simpleInboxFetchLimit, false, senderAgentID, senderTrackerID, senderName)
@@ -227,7 +227,7 @@ func loadAllInbox(local localClient, inboxOwner string) tea.Cmd {
 		if local == nil || inboxOwner == "" {
 			return allInboxLoaded{}
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		inbox, err := local.ReadInbox(ctx, inboxOwner, advancedInboxFetchLimit, false)
 		return allInboxLoaded{Messages: inbox.Messages, Err: err}
@@ -239,7 +239,7 @@ func loadUnreadCounts(local localClient, inboxOwner string) tea.Cmd {
 		if local == nil || strings.TrimSpace(inboxOwner) == "" {
 			return unreadCountsLoaded{}
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		result, err := local.GetUnreadCounts(ctx, inboxOwner)
 		return unreadCountsLoaded{Counts: result.Counts, Err: err}
@@ -511,7 +511,7 @@ func assignSwarmCmd(local localClient, swarmName, main string, subagents []strin
 		if local == nil {
 			return swarmAssigned{Err: errors.New("local tracker client unavailable")}
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		result, err := local.AssignSwarm(ctx, swarmName, main, subagents)
 		return swarmAssigned{Result: result, Err: err}
@@ -528,7 +528,7 @@ func sendOutboxRecord(local localClient, senderName string, row agentRow, record
 			return messageSent{Body: record.Body, Row: row, Record: record}
 		}
 		deliveryBody := messageBodyForDelivery(record.Body)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		var err error
 		if record.SwarmContext != "" {
@@ -570,7 +570,7 @@ func sendDirectInput(local localClient, row agentRow, action composerAction, all
 		if target == "" {
 			return directInputSent{Original: action.Original, Row: row, Mode: action.Kind, Err: errors.New("target agent unavailable")}
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		var err error
 		switch action.Kind {
@@ -705,7 +705,7 @@ func runNewAgentCmd(name, host, provider string, optionalArgs ...string) tea.Cmd
 
 func runConfiguredAgentCmd(name string) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		cmd := broccoliCommsCommandContext(ctx, "run", name, "--json")
 		out, err := cmd.CombinedOutput()
@@ -789,7 +789,7 @@ func immutableCopyName(item ConfigSelectionItem) string {
 
 func copyAgentImmutableCmd(item ConfigSelectionItem) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		newName := immutableCopyName(item)
 		source := fallback(item.TargetAddress, item.Name)
@@ -953,7 +953,7 @@ func loadConfigItemsFromBroccoliComms(ctx context.Context) ([]ConfigSelectionIte
 
 func loadConfigItemsCmd(local localClient) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		items, err := loadConfigItemsFromBroccoliComms(ctx)
 		if err == nil {
