@@ -19,15 +19,13 @@
 
   outputs = { self, nixpkgs, home-manager, broccoli-comms, pi-nix }@inputs:
     let
-      # Auto-detect system in impure mode, fallback to x86_64-linux in pure mode
-      system = let
-        current = builtins.currentSystem or "";
-      in if current != "" then current else "x86_64-linux";
+      setup = import ./setup.nix;
+      system = setup.system;
       pkgs = nixpkgs.legacyPackages.${system};
     in {
       homeConfigurations.codex = home-manager.lib.homeManagerConfiguration {
         inherit pkgs;
-        extraSpecialArgs = { inherit inputs; };
+        extraSpecialArgs = { inherit inputs setup; };
         modules = [
           broccoli-comms.homeManagerModules.default
           ./home.nix

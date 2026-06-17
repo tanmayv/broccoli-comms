@@ -1,15 +1,9 @@
-{ config, pkgs, lib, inputs, ... }: {
+{ config, pkgs, lib, inputs, setup, ... }: {
   # Home Manager needs a bit of information about you and the
   # paths it should manage.
-  # IMPORTANT: Update these placeholders with your actual username and home directory!
-  # Auto-detect username and home directory in impure mode, fallback to placeholders in pure mode
-  home.username = let
-    envUser = builtins.getEnv "USER";
-  in lib.mkDefault (if envUser != "" then envUser else "change-me");
-
-  home.homeDirectory = let
-    envHome = builtins.getEnv "HOME";
-  in lib.mkDefault (if envHome != "" then envHome else "/home/change-me");
+  # IMPORTANT: Update setup.nix with your actual username and home directory if not using impure mode!
+  home.username = lib.mkDefault setup.username;
+  home.homeDirectory = lib.mkDefault setup.homeDirectory;
 
   # This value determines the Home Manager release that your
   # configuration is compatible with. This helps avoid breakage
@@ -35,19 +29,19 @@
 
   # Enable the Broccoli Comms agent tracker service
   services.broccoli-comms = {
-    enable = true;
+    enable = lib.mkDefault setup.broccoli.enable;
     
     # Define settings for your agent tracker
     config = {
       paths = {
         # Workspace root for your agents
-        agentRootDir = "${config.home.homeDirectory}/agents-root";
+        agentRootDir = lib.mkDefault setup.broccoli.agentRootDir;
       };
       
       # Enable remote run to allow central orchestration
       registry = {
-        remoteRunEnabled = true;
-        authEnabled = false;
+        remoteRunEnabled = lib.mkDefault setup.broccoli.remoteRunEnabled;
+        authEnabled = lib.mkDefault setup.broccoli.authEnabled;
       };
     };
   };
