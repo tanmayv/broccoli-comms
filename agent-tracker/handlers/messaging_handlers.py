@@ -124,7 +124,7 @@ def _maybe_focus_remote_delivery(info: dict, current_name: str, msg_obj: dict) -
         logging.warning("Best-effort remote message focus failed for %s pane %s: %s", current_name, tmux_pane, e)
 
 
-def deliver_local_message(target_name_or_id: str, msg_obj: dict, notify_sender: str | None = None, verify: bool = False) -> str:
+def deliver_local_message(target_name_or_id: str, msg_obj: dict, notify_sender: str | None = None, verify: bool = False, interrupt: bool = False) -> str:
     """Writes a message to a local agent inbox and triggers/queues notification."""
     msg_id = msg_obj.get("message_id") or str(uuid.uuid4())
     msg_obj["message_id"] = msg_id
@@ -248,6 +248,17 @@ def deliver_local_message(target_name_or_id: str, msg_obj: dict, notify_sender: 
         if info.get("no_notify_with_send_keys", False):
             logging.info(f"Skipping tmux send-keys notification for {current_name} from {notify_sender}")
         else:
+            if interrupt:
+                tmux_pane = info.get("tmux_pane")
+                tmux_socket = info.get("tmux_socket")
+                if tmux_pane and tmux_socket:
+                    logging.info(f"Interrupting agent {current_name} in pane {tmux_pane} before sending message notification")
+                    try:
+                        tmux_util.send_symbolic_keys(tmux_pane, ["Escape"], socket_path=tmux_socket)
+                    except Exception as e:
+                        logging.warning(f"Best-effort interrupt Escape key delivery failed for {current_name}: {e}")
+                else:
+                    logging.warning(f"Cannot interrupt agent {current_name}: missing pane or tmux socket")
             notify_msg = f"New message in inbox from {notify_sender}"
             enable_reliable = config.get("core", "enable_reliable_send_keys", True)
             delivered = False
@@ -479,6 +490,13 @@ def handle_send_message(params: dict, caller_pid: int = None, identify_agent=Non
     sender_info = state.get_agent(params.get("sender_id") or sender_name) or {}
     sender_id = sender_info.get("agent_id") or params.get("sender_id")
     sender_metadata = _sender_metadata(sender_name, sender_info, sender_id)
+    
+    interrupt = params.get("interrupt", False)
+    if isinstance(interrupt, str):
+        interrupt = interrupt.lower() in ("true", "1", "yes")
+    if interrupt:
+        sender_metadata["interrupt"] = True
+
     content_metadata = params.get("metadata")
     if content_metadata is not None and not isinstance(content_metadata, dict):
         raise ValueError("metadata must be an object")
@@ -617,5 +635,15 @@ def handle_send_message(params: dict, caller_pid: int = None, identify_agent=Non
         payload["swarm_context"] = params.get("swarm")
     logging.info("local delivery payload target=%s sender=%s message_id=%s sender_agent_id=%s sender_tracker_id=%s", agent_name, sender_name, payload.get("message_id"), payload.get("sender_agent_id"), payload.get("sender_tracker_id"))
     verify = params.get("verify", False)
-    (deliver_message or deliver_local_message)(agent_name, payload, sender_name, verify=verify)
+    
+    if deliver_message:
+        import inspect
+        sig = inspect.signature(deliver_message)
+        if "interrupt" in sig.parameters:
+            deliver_message(agent_name, payload, sender_name, verify=verify, interrupt=interrupt)
+        else:
+            deliver_message(agent_name, payload, sender_name, verify=verify)
+    else:
+        deliver_local_message(agent_name, payload, sender_name, verify=verify, interrupt=interrupt)
+        
     return {"success": True, "warning": warning_msg} if warning_msg else True

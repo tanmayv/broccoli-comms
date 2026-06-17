@@ -103,5 +103,11 @@ with lib;
       default = 20;
       description = "Default number of tmux pane history lines captured by agent-tracker capture-pane and send-pane commands when --last is omitted.";
     };
+
+    restartWarnMessage = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = "Graceful stop warning message sent to the agent's TMUX pane. Supports {agent} and {timeout} placeholders.";
+    };
   };
 }

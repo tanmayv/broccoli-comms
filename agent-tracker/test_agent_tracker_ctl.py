@@ -315,6 +315,15 @@ class TestAgentTrackerCtl(unittest.TestCase):
         self.assertEqual(parsed.target, "alice")
         self.assertEqual(parsed.message, "hello")
         self.assertEqual(parsed.swarm_context, "backend-fix")
+        self.assertFalse(parsed.interrupt)
+
+        # Verify --interrupt flag
+        parsed2 = parser.parse_args(["send-message", "alice", "hello", "--interrupt"])
+        self.assertTrue(parsed2.interrupt)
+
+        # Verify --interupt alias
+        parsed3 = parser.parse_args(["send-message", "alice", "hello", "--interupt"])
+        self.assertTrue(parsed3.interrupt)
 
     @mock.patch("ctl_commands.send_message.call_rpc")
     @mock.patch.dict("os.environ", {}, clear=True)
@@ -322,7 +331,7 @@ class TestAgentTrackerCtl(unittest.TestCase):
         from ctl_commands import send_message
 
         mock_call_rpc.return_value = {"success": True}
-        args = mock.Mock(target="alice", message="hello", agent_id=None, swarm_context="backend-fix", verify=False)
+        args = mock.Mock(target="alice", message="hello", agent_id=None, swarm_context="backend-fix", verify=False, interrupt=False)
 
         with mock.patch("builtins.print"):
             send_message.handle(args)
@@ -331,6 +340,23 @@ class TestAgentTrackerCtl(unittest.TestCase):
             "message": "hello",
             "agent_name": "alice",
             "swarm_context": "backend-fix",
+        })
+
+    @mock.patch("ctl_commands.send_message.call_rpc")
+    @mock.patch.dict("os.environ", {}, clear=True)
+    def test_send_message_handler_forwards_interrupt(self, mock_call_rpc):
+        from ctl_commands import send_message
+
+        mock_call_rpc.return_value = {"success": True}
+        args = mock.Mock(target="alice", message="hello", agent_id=None, swarm_context=None, verify=False, interrupt=True)
+
+        with mock.patch("builtins.print"):
+            send_message.handle(args)
+
+        mock_call_rpc.assert_called_once_with("send_message", {
+            "message": "hello",
+            "agent_name": "alice",
+            "interrupt": True,
         })
 
     @mock.patch.dict(os.environ, {}, clear=True)

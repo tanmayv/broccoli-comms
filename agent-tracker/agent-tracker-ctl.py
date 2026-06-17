@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import ctl_commands.common as _common
 from ctl_commands.common import *  # re-export helpers for tests/backward compatibility
-from ctl_commands import daemon, ensure_running, focus, list as list_cmd, read_inbox, registry_status, rename, save, send_key, send_message, send_text, spin, status_bar, unregister, whoami, capture_pane, send_pane, pane_output, assign_swarm
+from ctl_commands import daemon, ensure_running, focus, list as list_cmd, read_inbox, registry_status, rename, save, send_key, send_message, send_text, spin, status_bar, unregister, whoami, capture_pane, send_pane, pane_output, assign_swarm, request_stop, restart
 
 def _sync_common_overrides():
     _common.REGISTRY_STATUS_PATH = REGISTRY_STATUS_PATH
@@ -53,6 +53,8 @@ COMMAND_MODULES = [
     send_pane,
     pane_output,
     assign_swarm,
+    request_stop,
+    restart,
 ]
 
 

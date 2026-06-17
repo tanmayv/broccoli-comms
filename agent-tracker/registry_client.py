@@ -1155,6 +1155,22 @@ def _event_loop(client=None):
             elif event.get("event_type") == "pane_capture_request":
                 payload = event.get("payload") or {}
                 threading.Thread(target=_handle_remote_pane_capture, args=(payload,), daemon=True).start()
+            elif event.get("event_type") == "remote_stop_request":
+                payload = event.get("payload") or {}
+                target_agent_id = payload.get("target_agent_id")
+                target_agent_name = payload.get("target_agent_name")
+                timeout = payload.get("timeout", "60s")
+                force = payload.get("force", False)
+                LOG.info("Received remote stop request for agent %s (%s) with timeout %s (force=%s)", target_agent_name, target_agent_id, timeout, force)
+                from handlers.agent_handlers import handle_request_stop
+                threading.Thread(target=handle_request_stop, args=({"agent_id": target_agent_id, "timeout": timeout, "force": force},), daemon=True).start()
+            elif event.get("event_type") == "remote_restart_request":
+                payload = event.get("payload") or {}
+                target_agent_id = payload.get("target_agent_id")
+                target_agent_name = payload.get("target_agent_name")
+                LOG.info("Received remote restart request for agent %s (%s)", target_agent_name, target_agent_id)
+                from handlers.agent_handlers import handle_restart_agent
+                threading.Thread(target=handle_restart_agent, args=({"agent_id": target_agent_id},), daemon=True).start()
             ack = ack_event(event.get("event_id")) if client is None else client.ack_event(event.get("event_id"))
             if ack != 200:
                 LOG.warning("failed to ack tracker event event_id=%s status=%s", event.get("event_id"), ack)
@@ -1224,6 +1240,9 @@ def _delivery_loop(client=None):
                     continue
 
                 LOG.info("delivering queued registry message message_id=%s sender_agent_id=%s sender_tracker_id=%s target_agent_id=%s", delivery.get("message_id"), delivery.get("sender_agent_id"), delivery.get("sender_tracker_id"), delivery.get("target_agent_id"))
+                interrupt = delivery.get("interrupt", False)
+                if isinstance(interrupt, str):
+                    interrupt = interrupt.lower() in ("true", "1", "yes")
                 deliver_local_message(
                     delivery["target_agent_id"],
                     {
@@ -1249,6 +1268,7 @@ def _delivery_loop(client=None):
                         "membership_snapshot": delivery.get("membership_snapshot") or {},
                         "swarm_context": delivery.get("swarm_context"),
                     },
+                    interrupt=interrupt
                 )
                 ack_key = delivery.get("delivery_id") or delivery["message_id"]
                 ack_status = _ack(client, ack_key)

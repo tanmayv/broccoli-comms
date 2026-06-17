@@ -540,3 +540,222 @@ def handle_unregister(params: dict, caller_pid: int = None, identify_agent=None)
     state.publish_event("agent_unregistered", agent_event_payload(agent_name, info))
     state.delete_agent(agent_name)
     return True
+
+
+def _resolve_local_agent_name(target: str) -> str | None:
+    if not target:
+        return None
+    if state.get_agent(target):
+        return target
+    name = state.get_agent_name_by_id(target)
+    if name:
+        return name
+    return None
+
+
+def _route_remote_stop_command(target_address: str, timeout_str: str, force: bool) -> bool:
+    registry_name = None
+    hostname, target = target_address.split("/", 1)
+    if ":" in hostname:
+        registry_name, hostname = hostname.split(":", 1)
+        
+    remote_recipient = registry_client.find_remote_agent(hostname, target, registry_name=registry_name)
+    if not remote_recipient or not remote_recipient.get("tracker_id"):
+        raise RuntimeError(f"Remote agent '{target_address}' not found or has no active tracker")
+        
+    target_tracker_id = remote_recipient["tracker_id"]
+    payload = {
+        "target_agent_id": remote_recipient.get("agent_id"),
+        "target_agent_name": remote_recipient.get("profile_name") or target,
+        "timeout": timeout_str,
+        "force": force
+    }
+    
+    logging.info(f"Routing remote stop command to tracker {target_tracker_id} for agent {target} (timeout: {timeout_str}, force: {force})")
+    status = registry_client.publish_tracker_event(target_tracker_id, "remote_stop_request", payload)
+    if status in (200, 202):
+        return True
+    raise RuntimeError(f"Failed to route remote stop command via registry: status {status}")
+
+
+def _route_remote_lifecycle_command(target_address: str, event_type: str, timeout: str = None) -> bool:
+    registry_name = None
+    hostname, target = target_address.split("/", 1)
+    if ":" in hostname:
+        registry_name, hostname = hostname.split(":", 1)
+        
+    remote_recipient = registry_client.find_remote_agent(hostname, target, registry_name=registry_name)
+    if not remote_recipient or not remote_recipient.get("tracker_id"):
+        raise RuntimeError(f"Remote agent '{target_address}' not found or has no active tracker")
+        
+    target_tracker_id = remote_recipient["tracker_id"]
+    payload = {
+        "target_agent_id": remote_recipient.get("agent_id"),
+        "target_agent_name": remote_recipient.get("profile_name") or target,
+    }
+    if timeout:
+        payload["timeout"] = timeout
+    
+    logging.info(f"Routing remote event '{event_type}' to tracker {target_tracker_id} for agent {target}")
+    status = registry_client.publish_tracker_event(target_tracker_id, event_type, payload)
+    if status in (200, 202):
+        return True
+    raise RuntimeError(f"Failed to route remote command via registry: status {status}")
+
+
+def _kill_local_agent(info: dict) -> bool:
+    """Sends SIGTERM to the agent wrapper or child process to force terminate it."""
+    wrapper_pid = info.get("wrapper_pid")
+    pid = info.get("pid")
+    agent_name = info.get("name")
+    
+    import signal
+    if wrapper_pid:
+        logging.info(f"Force terminating agent {agent_name} by sending SIGTERM to wrapper PID {wrapper_pid}")
+        try:
+            os.kill(wrapper_pid, signal.SIGTERM)
+            return True
+        except ProcessLookupError:
+            logging.warning(f"Wrapper process {wrapper_pid} not found for agent {agent_name}")
+            
+    if pid:
+        logging.info(f"Force terminating agent {agent_name} by sending SIGTERM to child PID {pid}")
+        try:
+            os.kill(pid, signal.SIGTERM)
+            return True
+        except ProcessLookupError:
+            logging.warning(f"Child process {pid} not found for agent {agent_name}")
+            
+    return False
+
+
+def _parse_timeout_to_seconds(timeout) -> float:
+    """Parses a timeout value (int, float, or string like '60s') into float seconds."""
+    if isinstance(timeout, (int, float)):
+        return float(timeout)
+    s = str(timeout).strip().lower()
+    if s.endswith("s"):
+        s = s[:-1]
+    try:
+        return float(s)
+    except ValueError:
+        logging.warning(f"Failed to parse timeout '{timeout}', falling back to 60.0s")
+        return 60.0
+
+
+def _enforce_stop_timeout(agent_name: str, timeout_seconds: float):
+    """Waits for the timeout, then force kills the agent if it is still registered."""
+    logging.info(f"Started stop timeout enforcement thread for agent {agent_name} (timeout: {timeout_seconds}s)")
+    time.sleep(timeout_seconds)
+    
+    # Check if the agent is still registered in state
+    info = state.get_agent(agent_name)
+    if info:
+        logging.warning(f"Agent {agent_name} did not exit within graceful timeout. Falling back to SIGTERM.")
+        _kill_local_agent(info)
+    else:
+        logging.info(f"Agent {agent_name} successfully exited gracefully within timeout.")
+
+
+def handle_request_stop(params: dict, caller_pid: int = None, identify_agent=None) -> bool:
+    """Handles stopping a local or remote agent gracefully, with hard SIGTERM fallback after timeout."""
+    target_address = params.get("target_address") or params.get("agent_name") or params.get("agent_id")
+    if not target_address:
+        raise ValueError("Invalid params: target is required")
+        
+    timeout = params.get("timeout", 60)
+    timeout_seconds = _parse_timeout_to_seconds(timeout)
+    timeout_str = f"{int(timeout_seconds)}s"
+    
+    force = params.get("force", False)
+    if isinstance(force, str):
+        force = force.lower() in ("true", "1", "yes")
+        
+    # Check if target is remote
+    if isinstance(target_address, str) and "/" in target_address:
+        return _route_remote_stop_command(target_address, timeout_str, force)
+        
+    # Resolve local agent
+    agent_name = _resolve_local_agent_name(target_address)
+    if not agent_name:
+        info = state.get_agent(target_address)
+        if info and info.get("scope") == "remote":
+            return _route_remote_stop_command(f"{info.get('hostname')}/{info.get('profile_name')}", timeout_str, force)
+        raise ValueError(f"Agent '{target_address}' not found")
+        
+    info = state.get_agent(agent_name)
+    if not info:
+        raise ValueError(f"Agent '{agent_name}' not found")
+        
+    if force:
+        logging.info(f"Force termination requested for agent {agent_name} (bypassing graceful warning)")
+        return _kill_local_agent(info)
+        
+    # Otherwise, perform graceful warning
+    tmux_pane = info.get("tmux_pane")
+    tmux_socket = info.get("tmux_socket")
+    if not tmux_pane:
+        raise RuntimeError(f"Agent '{agent_name}' has no registered tmux pane to send warning keys to")
+    if not tmux_socket:
+        raise RuntimeError(f"Agent '{agent_name}' has no registered tmux socket")
+        
+    import config
+    default_warn_msg = "> Prepare for restart in {timeout}. Do memory audit and update task so that can takeover from the same. Call broccoli-comms agent {agent} restart when ready"
+    warn_template = config.get("tracker", "restart_warn_message", default_warn_msg)
+    
+    try:
+        warning_msg = warn_template.format(agent=agent_name, timeout=timeout_str)
+    except KeyError as e:
+        logging.warning(f"Invalid placeholders in configured restart_warn_message: {e}. Falling back to default.")
+        warning_msg = default_warn_msg.format(agent=agent_name, timeout=timeout_str)
+        
+    logging.info(f"Sending graceful stop warning to agent {agent_name} in pane {tmux_pane} with timeout {timeout_str}")
+    
+    try:
+        # 1. Send Escape key to clear any pending prompt/state
+        tmux_util.send_symbolic_keys(tmux_pane, ["Escape"], socket_path=tmux_socket)
+        
+        # 2. Send warning message and press Enter
+        tmux_util.send_literal_text(tmux_pane, warning_msg, submit=True, socket_path=tmux_socket)
+        
+        # 3. Spawn background thread to enforce the timeout fallback
+        import threading
+        threading.Thread(target=_enforce_stop_timeout, args=(agent_name, timeout_seconds), daemon=True).start()
+        return True
+    except Exception as e:
+        raise RuntimeError(f"Failed to send graceful stop keys to agent {agent_name} pane {tmux_pane}: {e}")
+
+
+def handle_restart_agent(params: dict, caller_pid: int = None, identify_agent=None) -> bool:
+    """Handles restarting a local or remote agent."""
+    target_address = params.get("target_address") or params.get("agent_name") or params.get("agent_id")
+    if not target_address:
+        raise ValueError("Invalid params: target is required")
+        
+    # Check if target is remote
+    if isinstance(target_address, str) and "/" in target_address:
+        return _route_remote_lifecycle_command(target_address, "remote_restart_request")
+        
+    # Resolve local agent
+    agent_name = _resolve_local_agent_name(target_address)
+    if not agent_name:
+        info = state.get_agent(target_address)
+        if info and info.get("scope") == "remote":
+            return _route_remote_lifecycle_command(f"{info.get('hostname')}/{info.get('profile_name')}", "remote_restart_request")
+        raise ValueError(f"Agent '{target_address}' not found")
+        
+    info = state.get_agent(agent_name)
+    if not info:
+        raise ValueError(f"Agent '{agent_name}' not found")
+        
+    wrapper_pid = info.get("wrapper_pid")
+    if not wrapper_pid:
+        raise RuntimeError("Restart is only supported for agents running under agent-wrapper")
+        
+    import signal
+    logging.info(f"Restarting agent {agent_name} by sending SIGUSR1 to wrapper PID {wrapper_pid}")
+    try:
+        os.kill(wrapper_pid, signal.SIGUSR1)
+        return True
+    except ProcessLookupError:
+        raise RuntimeError(f"Wrapper process {wrapper_pid} not found for agent {agent_name}")

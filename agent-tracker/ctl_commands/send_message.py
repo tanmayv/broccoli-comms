@@ -24,6 +24,7 @@ def register(subparsers):
     parser.add_argument("--id", dest="agent_id", help="Target local agent ID (legacy local-only form)")
     parser.add_argument("--swarm-context", dest="swarm_context", help="Optional swarm name to classify user-targeted message in a swarm timeline")
     parser.add_argument("--verify", action="store_true", help="Wait for delivery confirmation in target pane")
+    parser.add_argument("--interrupt", "--interupt", dest="interrupt", action="store_true", help="Interrupt the agent by sending Escape key to its pane first")
     parser.set_defaults(handler=handle)
 
 
@@ -46,6 +47,9 @@ def handle(args):
 
     if args.verify:
         params["verify"] = True
+
+    if args.interrupt:
+        params["interrupt"] = True
 
     res = call_rpc("send_message", params)
     if isinstance(res, dict) and res.get("warning"):

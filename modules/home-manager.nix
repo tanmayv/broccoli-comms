@@ -87,6 +87,7 @@ let
       broad_watch_enabled = cfg.config.tracker.broadWatchEnabled;
       tracker_id = cfg.config.tracker.trackerId;
       address = cfg.config.tracker.address;
+      restart_warn_message = cfg.config.tracker.restartWarnMessage;
     };
     registry = compactAttrs {
       auth_enabled = cfg.config.registry.authEnabled;
@@ -317,6 +318,11 @@ in {
         trackerId = mkOption { type = types.nullOr types.str; default = null; description = "Specific UUID override for this tracker. Defaults to a DNS UUID derived from hostname if null. Defaults to null."; };
         address = mkOption { type = types.nullOr types.str; default = null; description = "External IP/hostname address of this tracker. If null, defaults to the hostname. Defaults to null."; };
         registries = mkOption { type = types.listOf registrySpecType; default = []; description = "List of target central registries. Each contains name (string), url (string), and optional token-file (string). Defaults to []."; };
+        restartWarnMessage = lib.mkOption {
+          type = lib.types.nullOr lib.types.str;
+          default = null;
+          description = "Graceful stop warning message sent to the agent's TMUX pane. Supports {agent} and {timeout} placeholders.";
+        };
       };
 
       registry = {

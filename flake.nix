@@ -162,7 +162,7 @@
           chmod -R u+w agent-tracker
           cp ${./app/learning_kernel.py} agent-tracker/learning_kernel.py
           cd agent-tracker
-          ${pkgs.python3}/bin/python3 -m unittest test_tmux_util.py test_spin_command.py test_agent_tracker_ctl.py test_agent_handlers.py
+          ${pkgs.python3}/bin/python3 -m unittest test_tmux_util.py test_spin_command.py test_agent_tracker_ctl.py test_agent_handlers.py test_agent_lifecycle.py
           touch $out
         '';
 

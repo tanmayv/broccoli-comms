@@ -168,7 +168,7 @@ class TestRpcHandler(unittest.TestCase):
     def test_handle_list_preserves_remote_agent_swarms(self):
         class FakeRegistryClient:
             name = "corp"
-            def fetch_agents(self):
+            def fetch_agents(self, *args, **kwargs):
                 return 200, {"agents": [{
                     "agent_id": "remote-id",
                     "hostname": "remote-host",
@@ -176,7 +176,7 @@ class TestRpcHandler(unittest.TestCase):
                     "status": "idle",
                     "swarms": [{"name": "backend-fix", "role": "subagent"}],
                 }]}
-            def fetch_trackers(self):
+            def fetch_trackers(self, *args, **kwargs):
                 return 200, {"trackers": []}
 
         with mock.patch.object(registry_client, "load_registry_clients", return_value=[FakeRegistryClient()]):
@@ -511,6 +511,38 @@ class TestRpcHandler(unittest.TestCase):
             timestamp = datetime.datetime.fromisoformat(message["timestamp"])
             self.assertIsNotNone(timestamp.tzinfo)
             self.assertIsNotNone(timestamp.utcoffset())
+        finally:
+            if os.path.exists(inbox_path):
+                os.remove(inbox_path)
+
+    @mock.patch("tmux_util.send_symbolic_keys")
+    @mock.patch("tmux_util.send_keys")
+    def test_send_message_with_interrupt_sends_escape(self, send_keys, send_symbolic_keys):
+        inbox_path = os.path.join(state.INBOX_DIR, "id-1.inbox")
+        try:
+            if os.path.exists(inbox_path):
+                os.remove(inbox_path)
+            state.set_agent(
+                "agent1",
+                {
+                    "agent_id": "id-1",
+                    "status": "working",
+                    "waiting_approval": False,
+                    "pending_notifications": [],
+                    "tmux_pane": "%1",
+                    "tmux_socket": "sock",
+                },
+            )
+            self.assertTrue(
+                rpc_handler.handle_send_message({
+                    "agent_id": "id-1",
+                    "message": "hello",
+                    "sender_name": "tester",
+                    "interrupt": True
+                })
+            )
+            send_symbolic_keys.assert_called_once_with("%1", ["Escape"], socket_path="sock")
+            send_keys.assert_called_once_with("%1", "New message in inbox from tester", "sock")
         finally:
             if os.path.exists(inbox_path):
                 os.remove(inbox_path)
@@ -2051,7 +2083,7 @@ class TestRpcHandler(unittest.TestCase):
         class FakeRegistryClient:
             name = "corp"
 
-            def fetch_agents(self):
+            def fetch_agents(self, *args, **kwargs):
                 return 200, {"agents": [
                     {
                         "agent_id": "id-main",
@@ -2076,7 +2108,7 @@ class TestRpcHandler(unittest.TestCase):
                     },
                 ]}
 
-            def fetch_trackers(self):
+            def fetch_trackers(self, *args, **kwargs):
                 return 200, {"trackers": []}
 
         state.set_agent("planner", {

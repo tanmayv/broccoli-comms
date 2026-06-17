@@ -125,6 +125,14 @@ def handle_unregister(params: dict, caller_pid: int = None) -> bool:
     return agent_handlers.handle_unregister(params, caller_pid, _identify_agent)
 
 
+def handle_request_stop(params: dict, caller_pid: int = None) -> bool:
+    return agent_handlers.handle_request_stop(params, caller_pid, _identify_agent)
+
+
+def handle_restart_agent(params: dict, caller_pid: int = None) -> bool:
+    return agent_handlers.handle_restart_agent(params, caller_pid, _identify_agent)
+
+
 DeliveryTargetNotFound = messaging_handlers.DeliveryTargetNotFound
 DeliveryValidationError = messaging_handlers.DeliveryValidationError
 
@@ -192,8 +200,8 @@ def _maybe_focus_remote_delivery(info: dict, current_name: str, msg_obj: dict) -
     return messaging_handlers._maybe_focus_remote_delivery(info, current_name, msg_obj)
 
 
-def deliver_local_message(target_name_or_id: str, msg_obj: dict, notify_sender: str | None = None, verify: bool = False) -> str:
-    return messaging_handlers.deliver_local_message(target_name_or_id, msg_obj, notify_sender, verify)
+def deliver_local_message(target_name_or_id: str, msg_obj: dict, notify_sender: str | None = None, verify: bool = False, interrupt: bool = False) -> str:
+    return messaging_handlers.deliver_local_message(target_name_or_id, msg_obj, notify_sender, verify, interrupt)
 
 
 def _resolve_local_target_address(params: dict, allow_remote: bool) -> dict:
@@ -1192,6 +1200,8 @@ dispatcher = {
     "get_inbox": handle_get_inbox,
     "get_unread_counts": handle_get_unread_counts,
     "list_swarms": handle_list_swarms,
+    "request_stop": handle_request_stop,
+    "restart_agent": handle_restart_agent,
     "assign_live_swarm": handle_assign_live_swarm,
     "assign_swarm": handle_assign_live_swarm,
     "get_group_timeline": handle_get_group_timeline,

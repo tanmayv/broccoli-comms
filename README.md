@@ -499,7 +499,20 @@ broccoli-comms agent-tracker list
 broccoli-comms agent-tracker read-inbox --last 10
 broccoli-comms agent-tracker registry-status
 broccoli-comms agent-tracker capture-pane agent-communicator --last 80
+broccoli-comms agent-tracker send-message alice "hello" --interrupt
+broccoli-comms agent-tracker request-stop alice --timeout 30s
+broccoli-comms agent-tracker restart alice
 ```
+
+### Lifecycle & messaging command details:
+
+- **`send-message TARGET MESSAGE [--interrupt]`**: Sends a message to a local or remote agent.
+  - `--interrupt` (alias `--interupt`): Sends the `Escape` key to the target agent's TMUX pane before printing the notification. This ensures stuck or busy agents are interrupted and receive the notification on a fresh command line.
+- **`request-stop TARGET [--timeout DURATION] [--force]`**: Requests a local or remote agent to stop.
+  - By default, performs a **graceful cooperative shutdown** by sending an `Escape` key and a warning notification directly into the agent's TMUX pane. This allows the running agent to perform a final memory audit, save state, and self-exit cleanly.
+  - `--timeout <duration>` (default `60s`): Sets the duration the tracker waits for the agent to exit. If the agent remains active after this duration, the tracker falls back to a hard process termination (`SIGTERM`).
+  - `--force`: Bypasses the graceful warning entirely and immediately terminates the agent using `SIGTERM`.
+- **`restart TARGET`**: Restarts a local agent running under `agent-wrapper` by sending `SIGUSR1` to the wrapper process. The wrapper loops and respawns the agent in the same TMUX window, preserving state and registration.
 
 For explicit pane control, `broccoli-comms agent-tracker send-text TARGET TEXT`, `broccoli-comms agent-tracker send-text --no-submit TARGET TEXT`, and `broccoli-comms agent-tracker send-key TARGET KEY [KEY...]` call the tracker `send_input` backend directly. These bypass inbox messages. Local bare names/UUIDs use the registered tmux pane/socket metadata; remote `host/agent` targets are registry-routed only when enabled on sender, registry, and receiver (`BROCCOLI_COMMS_REMOTE_PANE_INPUT_ENABLED=1` or the narrower send/receive/registry env gates). The Home Manager module enables these gates by default for managed services; set `services.broccoli-comms.tracker.remotePaneInput.enable = false` to opt out. Remote direct input should be treated as dangerous pane control.
 

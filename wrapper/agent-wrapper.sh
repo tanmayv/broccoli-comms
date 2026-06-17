@@ -261,18 +261,62 @@ PY
 }
 
 # shellcheck disable=SC2329 # invoked via EXIT trap
+restart_pending=false
+
+handle_usr1() {
+  echo "Wrapper received USR1 (restart request). Signaling child $child_pid..." >&2
+  restart_pending=true
+  kill -TERM "$child_pid" 2>/dev/null || true
+}
+
+handle_term() {
+  echo "Wrapper received TERM (stop request). Terminating child $child_pid..." >&2
+  restart_pending=false
+  kill -TERM "$child_pid" 2>/dev/null || true
+}
+
+trap handle_usr1 USR1
+trap handle_term TERM
+
+# shellcheck disable=SC2317 # invoked via EXIT trap
 cleanup() {
-  kill "$heartbeat_pid" >/dev/null 2>&1 || true
-  rpc_unregister
-  "${tmux_cmd[@]}" set-option -p -u -t "$pane_id" @agent_name 2>/dev/null || true
-  "${tmux_cmd[@]}" set-option -p -u -t "$pane_id" @agent_id 2>/dev/null || true
-  "${tmux_cmd[@]}" select-pane -t "$pane_id" -T "" 2>/dev/null || true
+  if [[ "$restart_pending" == "true" ]]; then
+    # Do not clean up or unregister if we are in the middle of a restart loop
+    :
+  else
+    kill "$heartbeat_pid" >/dev/null 2>&1 || true
+    rpc_unregister
+    "${tmux_cmd[@]}" set-option -p -u -t "$pane_id" @agent_name 2>/dev/null || true
+    "${tmux_cmd[@]}" set-option -p -u -t "$pane_id" @agent_id 2>/dev/null || true
+    "${tmux_cmd[@]}" select-pane -t "$pane_id" -T "" 2>/dev/null || true
+  fi
 }
 trap cleanup EXIT
 
 export BROCCOLI_COMMS_TRACK_ACTIVE=1
 export AGENT_WRAPPER_DEPTH=1
 
-run_status=0
-"$cmd" "$@" || run_status=$?
+while true; do
+  restart_pending=false
+  run_status=0
+  
+  # Run process in background so traps can interrupt 'wait' immediately
+  "$cmd" "$@" &
+  child_pid=$!
+  
+  set +e
+  wait "$child_pid"
+  run_status=$?
+  set -e
+  
+  # Check if a restart was requested (externally via USR1, or internally via exit code 111)
+  if [[ "$restart_pending" == "true" || "$run_status" -eq 111 ]]; then
+    echo "Respawning agent process..." >&2
+    sleep 1
+    continue
+  fi
+  
+  break
+done
+
 exit "$run_status"
