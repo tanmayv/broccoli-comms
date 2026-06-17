@@ -1,8 +1,11 @@
 let
   # Auto-detect system in impure mode, fallback to x86_64-linux in pure mode
   detectedSystem = let
+    envSystem = builtins.getEnv "SYSTEM";
     current = builtins.currentSystem or "";
-  in if current != "" then current else "x86_64-linux";
+  in if envSystem != "" then envSystem
+     else if current != "" then current
+     else "x86_64-linux";
 
   # Auto-detect username in impure mode, fallback to placeholder in pure mode
   detectedUser = let
