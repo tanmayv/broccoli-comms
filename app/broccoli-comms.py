@@ -124,7 +124,13 @@ VALID_SWARM_ROLES = {"main", "subagent"}
 
 
 def xdg_runtime() -> Path:
-    return Path(get_toml_config("paths", "runtime_dir", os.environ.get("XDG_RUNTIME_DIR") or f"/tmp/{os.getuid()}/broccoli-comms"))
+    configured = get_toml_config("paths", "runtime_dir")
+    if configured:
+        return Path(configured)
+    xdg_runtime_env = os.environ.get("XDG_RUNTIME_DIR")
+    if xdg_runtime_env:
+        return Path(xdg_runtime_env) / "broccoli-comms"
+    return Path(f"/tmp/{os.getuid()}/broccoli-comms")
 
 def xdg_cache() -> Path:
     return Path(get_toml_config("paths", "cache_dir", Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / APP))
