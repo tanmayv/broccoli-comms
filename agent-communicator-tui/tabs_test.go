@@ -10,12 +10,12 @@ import (
 )
 
 func TestTabBarRendersActiveMode(t *testing.T) {
-	m := model{width: 160, mode: swarmView, health: tracker.TrackerInfo{Build: tracker.BuildInfo{Display: "0.1.0+abc1234"}}}
+	m := model{width: 160, mode: swarmView, health: tracker.TrackerInfo{Build: tracker.BuildInfo{Display: "0.1.1"}}}
 	oldVersion := version
-	version = "0.1.0+ui"
+	version = "0.1.1"
 	defer func() { version = oldVersion }()
 	bar := m.bottomTabBar(m.width)
-	if !strings.Contains(bar, "ui 0.1.0+ui") || !strings.Contains(bar, "tracker 0.1.0+abc1234") {
+	if !strings.Contains(bar, "ui 0.1.1") || !strings.Contains(bar, "tracker 0.1.1") {
 		t.Fatalf("tab bar missing version diagnostics: %q", bar)
 	}
 	for _, want := range []string{"Simple Chat", "Swarm Mode", "Saved Messages", "Memory Management", "Tasks"} {

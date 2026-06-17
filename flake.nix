@@ -14,9 +14,7 @@
       lib = nixpkgs.lib;
       systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" "x86_64-darwin" ];
       forAllSystems = f: lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
-      revision = self.shortRev or self.dirtyShortRev or "unknown";
-      version = "0.1.0";
-      versionWithRevision = "${version}+${revision}";
+      version = "0.1.1";
     in {
       packages = forAllSystems (pkgs:
         let
@@ -50,7 +48,7 @@
             runtimeInputs = with pkgs; [ python3 tmux coreutils gnugrep procps bash ];
             text = ''
               export BROCCOLI_COMMS_VERSION=${version}
-              export BROCCOLI_COMMS_REVISION=${revision}
+              export BROCCOLI_COMMS_REVISION=""
               exec ${pkgs.python3}/bin/python3 ${agentTrackerFiles}/agent-tracker.py "$@"
             '';
           };
@@ -75,7 +73,7 @@
             version = version;
             src = ./agent-communicator-tui;
             vendorHash = null;
-            ldflags = [ "-X main.version=${versionWithRevision}" ];
+            ldflags = [ "-X main.version=${version}" ];
             postInstall = ''
               ln -sf $out/bin/agent-communicator-tui $out/bin/agent-communicator
             '';
@@ -87,7 +85,7 @@
             text = ''
               export PYTHONPATH=${./agent-tracker}:''${PYTHONPATH:-}
               export BROCCOLI_COMMS_VERSION=${version}
-              export BROCCOLI_COMMS_REVISION=${revision}
+              export BROCCOLI_COMMS_REVISION=""
               exec ${pkgs.python3}/bin/python3 ${./agent-registry/server.py} "$@"
             '';
           };
@@ -104,7 +102,7 @@
             text = ''
               export PATH=${lib.makeBinPath [ agentTracker agentTrackerCtl agentWrapper agentCommunicator agentRegistry pkgs.tmux pkgs.python3 pkgs.coreutils pkgs.procps pkgs.bash ]}:$PATH
               export BROCCOLI_COMMS_VERSION=${version}
-              export BROCCOLI_COMMS_REVISION=${revision}
+              export BROCCOLI_COMMS_REVISION=""
               export BROCCOLI_COMMS_AGENT_TRACKER=${agentTracker}/bin/agent-tracker
               export BROCCOLI_COMMS_AGENT_TRACKER_CTL=${agentTrackerFiles}/agent-tracker-ctl.py
               export BROCCOLI_COMMS_AGENT_WRAPPER=${agentWrapper}/bin/agent-wrapper
@@ -185,7 +183,7 @@
 
         communicator-tests = pkgs.buildGoModule {
           pname = "broccoli-comms-communicator-tests";
-          version = "0.1.0";
+          version = version;
           src = ./agent-communicator-tui;
           vendorHash = null;
           doCheck = true;
