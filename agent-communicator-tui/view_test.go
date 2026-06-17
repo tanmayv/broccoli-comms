@@ -256,7 +256,7 @@ func TestHomeTabWelcomeScreenRendersASCIIAndShortcuts(t *testing.T) {
 func TestChangelogTabRendersReleaseNotes(t *testing.T) {
 	m := model{width: 80, height: 80, mode: changelogView}
 	view := stripANSI(m.changelogPanel(80, 80))
-	for _, want := range []string{"Changelog", "v0.1.5", "v0.1.4", "v0.1.3", "TUI [Home] Tab", "v0.1.2"} {
+	for _, want := range []string{"Changelog", "v0.1.6", "v0.1.5", "v0.1.4", "v0.1.3", "TUI [Home] Tab", "v0.1.2"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("Changelog tab rendering missing %q:\n%s", want, view)
 		}

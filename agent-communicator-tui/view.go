@@ -716,8 +716,20 @@ func (m model) changelogPanel(width, height int) string {
 	divider := lipgloss.NewStyle().Foreground(colors.Border).Render(strings.Repeat("━", innerW))
 	b.WriteString(divider + "\n\n")
 
+	// v0.1.6
+	b.WriteString(versionStyle.Render("v0.1.6 (Latest Release)") + "\n")
+	b.WriteString(taglineStyle.Render("Add --wait flag to broccoli-comms run command, preserving pane output on exit") + "\n\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Run --wait Flag") + ": Added `--wait` flag to `broccoli-comms run` to keep the agent tmux pane open after completion or failure.\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Interactive Exit Prompt") + ": Implemented a 30-second countdown and keypress prompt inside the agent-wrapper when wait is enabled.\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Remote Wait Propagation") + ": Supported passing the wait flag through remote run request payloads to remote trackers.\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Comprehensive Documentation") + ": Documented the `--wait` flag in the root README.md file under quick reference and launch sections.\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Version Upgrade") + ": Bumped project and Nix flake packages to version 0.1.6.\n\n")
+
+	// Divider between releases
+	b.WriteString(lipgloss.NewStyle().Foreground(colors.Border).Render(strings.Repeat("─", innerW)) + "\n\n")
+
 	// v0.1.5
-	b.WriteString(versionStyle.Render("v0.1.5 (Latest Release)") + "\n")
+	b.WriteString(versionStyle.Render("v0.1.5") + "\n")
 	b.WriteString(taglineStyle.Render("Roomier sidebar layout, Swarms tab removal, onboarding updates, and styling fixes") + "\n\n")
 	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Swarms Tab Removal") + ": Completely removed the Swarms tab, its group coordination timeline views, and all related Alt-3/Alt-w shortcuts to streamline the interface.\n")
 	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Sidebar Width Increase") + ": Increased default TUI sidebar width to 35% across all remaining tabs (Home, Chat, Memory, Tasks) for enhanced readability.\n")
