@@ -140,7 +140,15 @@ func (m model) bottomTabLayout(width int) (string, []bottomTabHit) {
 	var b strings.Builder
 	hits := make([]bottomTabHit, 0, len(tabs))
 	cursor := 0
-	versionText := mutedStyle.Render(fitTabText(m.versionStatusLine(), max(1, min(width, 34))))
+	maxVersionW := 34
+	if width >= 120 {
+		maxVersionW = 50
+	} else if width >= 100 {
+		maxVersionW = 45
+	} else if width >= 80 {
+		maxVersionW = 40
+	}
+	versionText := mutedStyle.Render(fitTabText(m.versionStatusLine(), max(1, min(width, maxVersionW))))
 	versionW := lipgloss.Width(versionText)
 	if versionW > 0 && versionW < width {
 		b.WriteString(versionText)

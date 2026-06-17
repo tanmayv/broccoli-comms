@@ -15,7 +15,7 @@ func TestTabBarRendersActiveMode(t *testing.T) {
 	version = "0.1.0+ui"
 	defer func() { version = oldVersion }()
 	bar := m.bottomTabBar(m.width)
-	if !strings.Contains(bar, "ui 0.1.0+ui") || !strings.Contains(bar, "tracker 0.1.0+abc12") {
+	if !strings.Contains(bar, "ui 0.1.0+ui") || !strings.Contains(bar, "tracker 0.1.0+abc1234") {
 		t.Fatalf("tab bar missing version diagnostics: %q", bar)
 	}
 	for _, want := range []string{"Simple Chat", "Swarm Mode", "Saved Messages", "Memory Management", "Tasks"} {
