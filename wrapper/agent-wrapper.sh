@@ -260,15 +260,16 @@ for params in ({"tmux_pane": pane_id}, {"agent_id": agent_id}):
 PY
 }
 
-# shellcheck disable=SC2329 # invoked via EXIT trap
 restart_pending=false
 
+# shellcheck disable=SC2329 # invoked via USR1 trap
 handle_usr1() {
   echo "Wrapper received USR1 (restart request). Signaling child $child_pid..." >&2
   restart_pending=true
   kill -TERM "$child_pid" 2>/dev/null || true
 }
 
+# shellcheck disable=SC2329 # invoked via TERM trap
 handle_term() {
   echo "Wrapper received TERM (stop request). Terminating child $child_pid..." >&2
   restart_pending=false
@@ -278,7 +279,7 @@ handle_term() {
 trap handle_usr1 USR1
 trap handle_term TERM
 
-# shellcheck disable=SC2317 # invoked via EXIT trap
+# shellcheck disable=SC2317,SC2329 # invoked via EXIT trap
 cleanup() {
   if [[ "$restart_pending" == "true" ]]; then
     # Do not clean up or unregister if we are in the middle of a restart loop
