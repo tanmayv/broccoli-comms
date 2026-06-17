@@ -7,7 +7,8 @@ import registry_client
 
 class TestRegistryClientMulti(unittest.TestCase):
     def test_load_registry_clients_requires_registries_json(self):
-        with mock.patch.dict("os.environ", {}, clear=True):
+        with mock.patch.dict("os.environ", {}, clear=True), \
+             mock.patch.object(registry_client.config, "get", return_value=[]):
             clients = registry_client.load_registry_clients()
         self.assertEqual(clients, [])
 

@@ -1108,6 +1108,30 @@ def _configured_agent_view(name: str, spec: dict) -> dict:
 def _remote_registry_agents() -> dict:
     """Best-effort remote registry listing without starting a local launch path."""
     remote: dict[str, dict] = {}
+    local_tracker_id = None
+    try:
+        info = tracker_rpc("tracker_info", {}, timeout=1.0)
+        if isinstance(info, dict):
+            local_tracker_id = info.get("tracker_id")
+    except Exception:
+        pass
+    if not local_tracker_id:
+        try:
+            hostname = os.environ.get("AGENT_TRACKER_HOSTNAME") or socket.gethostname()
+            config_path = get_config_path()
+            if config_path.exists() and tomllib:
+                with open(config_path, "rb") as f:
+                    cfg = tomllib.load(f)
+                    local_tracker_id = cfg.get("tracker", {}).get("tracker_id")
+                    if not local_tracker_id:
+                        h = cfg.get("tracker", {}).get("hostname")
+                        if h:
+                            hostname = h
+            if not local_tracker_id:
+                local_tracker_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, hostname))
+        except Exception:
+            pass
+
     for entry in load_registry_urls_config().get("registries", []):
         if not entry.get("enabled", True):
             continue
@@ -1115,15 +1139,20 @@ def _remote_registry_agents() -> dict:
         headers = {"Accept": "application/json"}
         if token:
             headers["Authorization"] = f"Bearer {token}"
-        url = entry["url"].rstrip("/") + "/agents"
+        
+        # 1. Fetch running agents
+        agents_url = entry["url"].rstrip("/") + "/agents"
+        running_agents = []
         try:
-            req = urllib.request.Request(url, headers=headers)
+            req = urllib.request.Request(agents_url, headers=headers)
             with urllib.request.urlopen(req, timeout=2.0) as resp:
                 body = json.loads(resp.read().decode() or "{}")
+                running_agents = (body or {}).get("agents") or []
         except Exception:
-            continue
+            pass
+            
         registry_name = entry.get("name") or "default"
-        for agent in (body or {}).get("agents") or []:
+        for agent in running_agents:
             hostname = agent.get("hostname")
             agent_name = agent.get("name")
             if not hostname or not agent_name:
@@ -1133,10 +1162,56 @@ def _remote_registry_agents() -> dict:
             remote[key] = {
                 **agent,
                 "name": key,
+                "profile_name": agent_name,
                 "scope": "remote",
                 "target_address": key,
                 "registry_name": registry_name,
             }
+            
+        # 2. Fetch all trackers
+        trackers_url = entry["url"].rstrip("/") + "/trackers"
+        trackers_list = []
+        try:
+            req = urllib.request.Request(trackers_url, headers=headers)
+            with urllib.request.urlopen(req, timeout=2.0) as resp:
+                body = json.loads(resp.read().decode() or "{}")
+                trackers_list = (body or {}).get("trackers") or []
+        except Exception:
+            pass
+            
+        for tracker in trackers_list:
+            tracker_id = tracker.get("tracker_id")
+            hostname = tracker.get("hostname")
+            if not tracker_id or not hostname:
+                continue
+            if local_tracker_id and tracker_id == local_tracker_id:
+                continue
+            for config in tracker.get("agent_configs") or []:
+                agent_name = config.get("name")
+                if not agent_name:
+                    continue
+                base_key = f"{hostname}/{agent_name}"
+                if base_key in remote:
+                    remote[base_key]["is_configured"] = True
+                    remote[base_key]["profile_name"] = agent_name
+                    continue
+                
+                key = base_key if base_key not in remote else f"{registry_name}:{base_key}"
+                remote[key] = {
+                    "name": key,
+                    "profile_name": agent_name,
+                    "hostname": hostname,
+                    "tracker_id": tracker_id,
+                    "scope": "remote",
+                    "target_address": key,
+                    "registry_name": registry_name,
+                    "is_configured": True,
+                    "running": False,
+                    "status": "configured",
+                    "launchable": True,
+                    "copyable": True,
+                    "description": config.get("description", ""),
+                }
     return remote
 
 
@@ -1223,12 +1298,13 @@ def merged_agent_rows(*, include_remote: bool = False) -> dict[str, dict]:
         current_task_fields = {**_tracker_current_task_fields(tracker), **durable_current_task}
         row = {
             "name": name,
+            "profile_name": (tracker or {}).get("profile_name") or name,
             "configured": configured_view,
-            "is_configured": spec is not None,
+            "is_configured": spec is not None or (tracker and tracker.get("is_configured", False)),
             "remote": remote,
             "scope_kind": "remote" if remote else "local",
-            "source": "+".join(part for part, present in (("configured", spec is not None), ("running", bool(windows_by_name.get(name)) or bool(tracker and not remote)), ("remote", remote)) if present) or "unknown",
-            "running": bool(windows_by_name.get(name)) or bool(tracker and not remote),
+            "source": "+".join(part for part, present in (("configured", spec is not None or (tracker and tracker.get("is_configured", False))), ("running", bool(windows_by_name.get(name)) or bool(tracker and not remote) or (remote and tracker.get("running", False))), ("remote", remote)) if present) or "unknown",
+            "running": bool(windows_by_name.get(name)) or bool(tracker and not remote) or (remote and tracker.get("running", False)),
             "window_exists": bool(windows_by_name.get(name)),
             "managed_windows": windows_by_name.get(name, []),
             "tracker": tracker,
@@ -1238,8 +1314,8 @@ def merged_agent_rows(*, include_remote: bool = False) -> dict[str, dict]:
             "tracker_id": (tracker or {}).get("tracker_id"),
             "registry_name": (tracker or {}).get("registry_name"),
             "status": (tracker or {}).get("status") or ("configured" if spec is not None else "unknown"),
-            "launchable": bool(spec and spec.get("command")),
-            "copyable": bool(spec and spec.get("command")) or bool((tracker or {}).get("command") or (tracker or {}).get("agent_command") or (tracker or {}).get("agent_cmd")),
+            "launchable": bool(spec and spec.get("command")) or (tracker and tracker.get("launchable", False)),
+            "copyable": bool(spec and spec.get("command")) or bool(tracker and (tracker.get("command") or tracker.get("agent_command") or tracker.get("agent_cmd") or tracker.get("copyable"))),
             **current_task_fields,
         }
         if spec is not None:
@@ -1970,7 +2046,11 @@ def configured_agent_command_checks() -> list[dict]:
         elif executable in SHELL_BUILTINS:
             _doctor_check(checks, check_name, "warning", "command starts with a shell builtin; skipping executable lookup", command=command, executable=executable)
         else:
-            resolved = _resolve_executable(executable)
+            provider_cfg = get_toml_config("providers", executable, {})
+            resolved_executable = executable
+            if provider_cfg:
+                resolved_executable = provider_cfg.get("cmd", executable)
+            resolved = _resolve_executable(resolved_executable)
             if resolved:
                 _doctor_check(checks, check_name, "ok", "configured command executable found", command=command, executable=executable, path=resolved)
             else:

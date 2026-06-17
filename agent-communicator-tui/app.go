@@ -87,6 +87,11 @@ type model struct {
 	runAgentArgs        []rune
 	runAgentField       int
 	runAgentSuggestions []string
+	runAgentIsExisting  bool   // True if overriding existing agent, False if new
+	runAgentProfileName string // Short name for execution
+	runAgentDefaultCWD  string // Default CWD to show as hint
+	runAgentDefaultProv string // Default provider to detect overrides
+	runAgentCWD         []rune // CWD override input
 
 	// Prompt templates (Ctrl-O)
 	prompts           []promptTemplate

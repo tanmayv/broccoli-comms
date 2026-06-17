@@ -515,14 +515,32 @@ func (m model) handleConfigMenuKey(msg tea.KeyMsg) (model, tea.Cmd) {
 				m.openRunAgentForm(item)
 				return m, nil
 			}
-			if item.Running || item.IsRemote || !item.Launchable {
+			if item.IsRemote {
+				if item.Running || !item.Launchable {
+					return m, copyAgentImmutableCmd(item)
+				}
+				m.openRunAgentForm(item)
+				return m, nil
+			}
+			if item.Running || !item.Launchable {
 				return m, copyAgentImmutableCmd(item)
 			}
-			return m, runConfiguredAgentCmd(item.Name)
+			m.openRunAgentForm(item)
+			return m, nil
 		}
 		return m, nil
 	}
 	return m, nil
+}
+
+func (m model) nextRunAgentField(delta int) int {
+	numFields := 4
+	next := (m.runAgentField + delta + numFields) % numFields
+	if m.runAgentIsExisting && next == 0 {
+		// Skip Name field for existing agents
+		next = (next + delta + numFields) % numFields
+	}
+	return next
 }
 
 func (m model) handleRunAgentFormKey(msg tea.KeyMsg) (model, tea.Cmd) {
@@ -533,6 +551,7 @@ func (m model) handleRunAgentFormKey(msg tea.KeyMsg) (model, tea.Cmd) {
 		m.showingRunAgentForm = false
 		m.runAgentName = nil
 		m.runAgentArgs = nil
+		m.runAgentCWD = nil
 		return m, nil
 	case tea.KeyTab:
 		if m.runAgentField == 0 {
@@ -541,50 +560,63 @@ func (m model) handleRunAgentFormKey(msg tea.KeyMsg) (model, tea.Cmd) {
 				return m, nil
 			}
 		}
-		m.runAgentField = (m.runAgentField + 1) % 3
+		m.runAgentField = m.nextRunAgentField(1)
 		return m, nil
 	case tea.KeyUp, tea.KeyCtrlP:
-		if m.runAgentField == 1 {
+		if m.runAgentField == 2 {
 			m.cycleRunAgentProvider(-1)
 			return m, nil
 		}
-		m.runAgentField = (m.runAgentField + 2) % 3
+		m.runAgentField = m.nextRunAgentField(-1)
 		return m, nil
 	case tea.KeyDown, tea.KeyCtrlN:
-		if m.runAgentField == 1 {
+		if m.runAgentField == 2 {
 			m.cycleRunAgentProvider(1)
 			return m, nil
 		}
-		m.runAgentField = (m.runAgentField + 1) % 3
+		m.runAgentField = m.nextRunAgentField(1)
 		return m, nil
 	case tea.KeyBackspace:
-		if m.runAgentField == 2 {
+		if m.runAgentField == 0 {
+			if !m.runAgentIsExisting && len(m.runAgentName) > 0 {
+				m.runAgentName = m.runAgentName[:len(m.runAgentName)-1]
+			}
+		} else if m.runAgentField == 1 {
+			if len(m.runAgentCWD) > 0 {
+				m.runAgentCWD = m.runAgentCWD[:len(m.runAgentCWD)-1]
+			}
+		} else if m.runAgentField == 3 {
 			if len(m.runAgentArgs) > 0 {
 				m.runAgentArgs = m.runAgentArgs[:len(m.runAgentArgs)-1]
 			}
-		} else if len(m.runAgentName) > 0 {
-			m.runAgentName = m.runAgentName[:len(m.runAgentName)-1]
 		}
 		return m, nil
 	case tea.KeySpace:
-		if m.runAgentField == 2 {
-			m.runAgentArgs = append(m.runAgentArgs, ' ')
-		} else {
+		if m.runAgentField == 0 && !m.runAgentIsExisting {
 			m.runAgentName = append(m.runAgentName, '-')
+		} else if m.runAgentField == 1 {
+			m.runAgentCWD = append(m.runAgentCWD, ' ')
+		} else if m.runAgentField == 3 {
+			m.runAgentArgs = append(m.runAgentArgs, ' ')
 		}
 		return m, nil
 	case tea.KeyRunes:
-		if m.runAgentField == 1 {
+		if m.runAgentField == 2 {
+			return m, nil
+		}
+		if m.runAgentField == 0 && m.runAgentIsExisting {
 			return m, nil
 		}
 		for _, r := range msg.Runes {
 			if m.runAgentField == 0 && r == ' ' {
 				r = '-'
 			}
-			if m.runAgentField == 2 {
-				m.runAgentArgs = append(m.runAgentArgs, r)
-			} else {
+			if m.runAgentField == 0 {
 				m.runAgentName = append(m.runAgentName, r)
+			} else if m.runAgentField == 1 {
+				m.runAgentCWD = append(m.runAgentCWD, r)
+			} else if m.runAgentField == 3 {
+				m.runAgentArgs = append(m.runAgentArgs, r)
 			}
 		}
 		return m, nil
@@ -598,7 +630,18 @@ func (m model) handleRunAgentFormKey(msg tea.KeyMsg) (model, tea.Cmd) {
 		m.runAgentName = nil
 		optionalArgs := strings.TrimSpace(string(m.runAgentArgs))
 		m.runAgentArgs = nil
-		return m, runNewAgentCmd(name, m.runAgentHost, m.runAgentProvider, optionalArgs)
+		cwdOverride := strings.TrimSpace(string(m.runAgentCWD))
+		m.runAgentCWD = nil
+		return m, runAgentWithOverridesCmd(
+			m.runAgentIsExisting,
+			m.runAgentProfileName,
+			m.runAgentHost,
+			cwdOverride,
+			m.runAgentDefaultCWD,
+			m.runAgentProvider,
+			m.runAgentDefaultProv,
+			optionalArgs,
+		)
 	}
 	return m, nil
 }

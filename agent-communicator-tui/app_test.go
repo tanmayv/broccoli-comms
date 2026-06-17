@@ -778,14 +778,16 @@ func TestRunNewAgentFormAutocompleteProviderDropdownAndArgs(t *testing.T) {
 	if string(m.runAgentName) != "coder-main" || m.runAgentField != 0 {
 		t.Fatalf("tab should autocomplete name before moving fields: name=%q field=%d", string(m.runAgentName), m.runAgentField)
 	}
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab}) // Move from 0 (Name) to 1 (CWD)
 	m = updated.(model)
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab}) // Move from 1 (CWD) to 2 (Provider)
+	m = updated.(model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown}) // Cycle provider to "pi"
 	m = updated.(model)
 	if m.runAgentProvider != "pi" {
 		t.Fatalf("provider dropdown did not cycle to pi: %q", m.runAgentProvider)
 	}
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab}) // Move from 2 (Provider) to 3 (Args)
 	m = updated.(model)
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("--json --verbose")})
 	m = updated.(model)
@@ -978,5 +980,88 @@ func TestFooterShowsRetryHintForError(t *testing.T) {
 	footer := m.footer(120)
 	if !strings.Contains(footer, "error · boom · r retry") {
 		t.Fatalf("footer missing retry hint: %q", footer)
+	}
+}
+
+func TestExistingAgentRunOverrides(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmp)
+	configDir := filepath.Join(tmp, "broccoli-comms")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(configDir, "config.toml"), []byte("[providers.jetski]\ncmd = 'jetski'\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	config.ResetForTest()
+	defer config.ResetForTest()
+
+	m := model{
+		configItems: []ConfigSelectionItem{
+			{
+				Name:        "concord-agent",
+				ProfileName: "concord-agent",
+				Description: "configured agent",
+				Hostname:    localHostname(),
+				Configured:  true,
+				Launchable:  true,
+				Command:     "jetski",
+				CWD:         "/default/cwd/path",
+			},
+		},
+		showingConfigMenu: true,
+		configSelected:    0,
+		local:             &fakeLocal{},
+	}
+
+	// 1. Press Enter in the config menu on the configured agent
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(model)
+
+	if cmd != nil {
+		t.Fatal("Enter on launchable configured agent should NOT return an execution command immediately")
+	}
+	if !m.showingRunAgentForm {
+		t.Fatal("Enter should have opened the run agent form")
+	}
+	if !m.runAgentIsExisting {
+		t.Fatal("Form should be marked as existing agent launcher")
+	}
+	if string(m.runAgentName) != "concord-agent" {
+		t.Fatalf("Expected pre-populated name concord-agent, got %q", string(m.runAgentName))
+	}
+	if string(m.runAgentCWD) != "/default/cwd/path" {
+		t.Fatalf("Expected pre-populated CWD /default/cwd/path, got %q", string(m.runAgentCWD))
+	}
+	if m.runAgentField != 1 {
+		t.Fatalf("Focus should start at CWD override field (index 1) for existing agents, got %d", m.runAgentField)
+	}
+
+	// 2. Type CWD override characters (Backspace then type 'h-override')
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	m = updated.(model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h-override")})
+	m = updated.(model)
+
+	if got := string(m.runAgentCWD); got != "/default/cwd/path-override" {
+		t.Fatalf("CWD override mismatch: got %q, want %q", got, "/default/cwd/path-override")
+	}
+
+	// 3. Verify the arguments builder returns the correct arguments with the CWD override
+	optionalArgs := strings.TrimSpace(string(m.runAgentArgs))
+	args := runAgentWithOverridesArgs(
+		m.runAgentIsExisting,
+		m.runAgentProfileName,
+		m.runAgentHost,
+		string(m.runAgentCWD),
+		m.runAgentDefaultCWD,
+		m.runAgentProvider,
+		m.runAgentDefaultProv,
+		optionalArgs,
+	)
+
+	want := []string{"run", "--cwd", "/default/cwd/path-override", "--json", "concord-agent"}
+	if strings.Join(args, "\x00") != strings.Join(want, "\x00") {
+		t.Fatalf("args = %#v, want %#v", args, want)
 	}
 }

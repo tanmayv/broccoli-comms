@@ -319,35 +319,124 @@ func (m model) renderPromptMenu(width, height int) string {
 }
 
 func (m model) renderRunAgentForm(width, height int) string {
-	name := string(m.runAgentName)
-	if name == "" {
-		name = "agent-name"
-	}
-	provider := fallback(m.runAgentProvider, "no configured provider")
-	args := string(m.runAgentArgs)
-	if args == "" {
-		args = "—"
-	}
-	row := func(index int, label, value string) string {
-		style := lipgloss.NewStyle().Foreground(colors.TextStrong)
-		prefix := "  "
-		if m.runAgentField == index {
-			style = style.Background(colors.SelectedBg).Foreground(colors.SelectedFg)
-			prefix = "> "
+	innerW := panelInnerWidth(width)
+	
+	// Base input box style
+	var inputFieldStyle = lipgloss.NewStyle().
+		Padding(0, 1).
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(colors.Border)
+
+	// Focused input box style
+	var focusedInputFieldStyle = lipgloss.NewStyle().
+		Padding(0, 1).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colors.Success).
+		Bold(true)
+
+	// Label styles
+	var formLabelStyle = lipgloss.NewStyle().
+		Foreground(colors.TextStrong).
+		Bold(false)
+
+	var focusedFormLabelStyle = lipgloss.NewStyle().
+		Foreground(colors.Success).
+		Bold(true)
+
+	renderField := func(index int, label string, value string, placeholder string, hint string) string {
+		isFocused := m.runAgentField == index
+		
+		// Style label
+		lblStyle := formLabelStyle
+		if isFocused {
+			lblStyle = focusedFormLabelStyle
 		}
-		return prefix + label + ": " + style.Render(value)
+		lbl := lblStyle.Render(label)
+
+		// Style value
+		valStr := value
+		if valStr == "" {
+			valStr = lipgloss.NewStyle().Foreground(colors.Muted).Render(placeholder)
+		} else {
+			if isFocused {
+				valStr = lipgloss.NewStyle().Foreground(colors.SelectedFg).Render(valStr)
+			} else {
+				valStr = lipgloss.NewStyle().Foreground(colors.Text).Render(valStr)
+			}
+		}
+
+		// Apply box borders
+		boxStyle := inputFieldStyle
+		if isFocused {
+			boxStyle = focusedInputFieldStyle
+		}
+		box := boxStyle.Render(valStr)
+
+		// Render row
+		rowStr := lbl + "\n" + box
+		if hint != "" {
+			rowStr += "\n" + lipgloss.NewStyle().Foreground(colors.Muted).Render(hint)
+		}
+		return rowStr
 	}
-	suggestion := completeAgentName(string(m.runAgentName), m.runAgentSuggestions)
-	if suggestion == "" || suggestion == string(m.runAgentName) {
-		suggestion = "—"
+
+	// 1. Name Row (Read-Only if existing)
+	var nameRow string
+	if m.runAgentIsExisting {
+		lbl := formLabelStyle.Render("Agent Name (Read-Only)")
+		val := lipgloss.NewStyle().Foreground(colors.TextStrong).Bold(true).Render(string(m.runAgentName))
+		nameRow = lbl + "\n" + val
+	} else {
+		nameVal := string(m.runAgentName)
+		suggestion := completeAgentName(nameVal, m.runAgentSuggestions)
+		hint := ""
+		if suggestion != "" && suggestion != nameVal {
+			hint = "💡 Tab to autocomplete: " + suggestion
+		}
+		nameRow = renderField(0, "Agent Name", nameVal, "Enter agent name...", hint)
 	}
-	content := titleStyle.Render("Run new agent") + "\n" +
-		mutedStyle.Render("Host: "+fallback(m.runAgentHost, localHostname())+" · tab field/autocomplete · provider ↑/↓") + "\n\n" +
-		row(0, "Agent name", name) + mutedStyle.Render("  suggestion "+suggestion) + "\n" +
-		row(1, "Provider", provider) + "\n" +
-		row(2, "Optional args", args) + "\n\n" +
-		mutedStyle.Render("Enter run via broccoli-comms run · Esc cancel")
-	return box(content, width, height)
+
+	// 2. CWD Row
+	cwdVal := string(m.runAgentCWD)
+	cwdHint := ""
+	if m.runAgentIsExisting && m.runAgentDefaultCWD != "" {
+		cwdHint = "💡 Default: " + m.runAgentDefaultCWD
+	} else {
+		cwdHint = "💡 Leave empty for default"
+	}
+	cwdRow := renderField(1, "Working Directory (CWD Override)", cwdVal, "Enter working directory...", cwdHint)
+
+	// 3. Provider Row
+	provVal := fallback(m.runAgentProvider, "no configured provider")
+	if m.runAgentField == 2 {
+		provVal = "◀  " + provVal + "  ▶"
+	}
+	provRow := renderField(2, "Provider (Override)", provVal, "Select provider...", "💡 Use ↑/↓ arrow keys to cycle providers")
+
+	// 4. Args Row
+	argsVal := string(m.runAgentArgs)
+	argsRow := renderField(3, "Optional Arguments", argsVal, "Enter optional arguments...", "")
+
+	// Card Header
+	headerText := "🚀 RUN NEW AGENT"
+	if m.runAgentIsExisting {
+		headerText = "🚀 RUN EXISTING AGENT: " + m.runAgentProfileName
+	}
+	header := lipgloss.NewStyle().Bold(true).Foreground(colors.Accent).Render(headerText) + "\n" +
+		lipgloss.NewStyle().Foreground(colors.Muted).Render("Host: "+m.runAgentHost)
+
+	// Divider
+	divider := lipgloss.NewStyle().Foreground(colors.Border).Render(strings.Repeat("─", max(1, innerW)))
+
+	// Card Footer
+	footer := lipgloss.NewStyle().Foreground(colors.Muted).Render("Enter: Run Agent  ·  Tab: Next Field  ·  Esc: Cancel")
+
+	// Card Body
+	body := nameRow + "\n\n" + cwdRow + "\n\n" + provRow + "\n\n" + argsRow
+
+	// Final Layout
+	cardContent := header + "\n" + divider + "\n\n" + body + "\n\n" + divider + "\n" + footer
+	return box(cardContent, width, height)
 }
 
 func (m model) renderConfigMenu(width, height int) string {
@@ -362,7 +451,26 @@ func (m model) renderConfigMenu(width, height int) string {
 		body = lipgloss.NewStyle().Foreground(colors.Error).Render("No agents match search: " + query)
 	} else {
 		var listLines []string
+		lastHost := ""
+		isNewAgentSection := false
+
 		for i, item := range items {
+			// Section Header Logic
+			if item.IsNewAgent && !isNewAgentSection {
+				listLines = append(listLines, "\n"+sectionHeaderStyle.Render("🌐 NEW AGENTS"))
+				isNewAgentSection = true
+				lastHost = ""
+			} else if !item.IsNewAgent {
+				host := fallback(item.Hostname, localHostname())
+				if host != lastHost {
+					headerText := "🌐 LOCAL (" + host + ")"
+					if item.IsRemote {
+						headerText = "🌐 REMOTE (" + host + ")"
+					}
+					listLines = append(listLines, "\n"+sectionHeaderStyle.Render(headerText))
+					lastHost = host
+				}
+			}
 			style := lipgloss.NewStyle().Foreground(colors.Text)
 			prefix := "  "
 			if i == m.configSelected {
@@ -374,7 +482,13 @@ func (m model) renderConfigMenu(width, height int) string {
 			if item.IsNewAgent {
 				scopePrefix = fmt.Sprintf("[%s] new ", fallback(item.Hostname, localHostname()))
 			} else if item.IsRemote {
-				scopePrefix = fmt.Sprintf("[%s] remote ", fallback(item.Hostname, "remote"))
+				if item.Running {
+					scopePrefix = fmt.Sprintf("[%s] remote running ", fallback(item.Hostname, "remote"))
+				} else if item.Configured {
+					scopePrefix = fmt.Sprintf("[%s] remote configured ", fallback(item.Hostname, "remote"))
+				} else {
+					scopePrefix = fmt.Sprintf("[%s] remote ", fallback(item.Hostname, "remote"))
+				}
 			} else if item.Running {
 				scopePrefix = fmt.Sprintf("[%s] running ", localHostname())
 			} else if item.Configured {
@@ -389,13 +503,21 @@ func (m model) renderConfigMenu(width, height int) string {
 				scopeStyle = scopeStyle.Background(colors.SelectedBg).Foreground(colors.SelectedFg)
 			}
 
-			action := "Enter: run"
+			action := "Enter: run/override"
 			if item.IsNewAgent {
 				action = "Enter: form"
-			} else if item.Running || item.IsRemote || !item.Launchable {
+			} else if item.IsRemote {
+				if item.Running {
+					action = "Enter: copy"
+				} else if item.Launchable {
+					action = "Enter: run/override (remote) · c: copy"
+				} else {
+					action = "Enter: copy"
+				}
+			} else if item.Running || !item.Launchable {
 				action = "Enter: immutable copy"
 			} else if item.Copyable {
-				action = "Enter: run · c: copy"
+				action = "Enter: run/override · c: copy"
 			}
 			line := prefix + scopeStyle.Render(scopePrefix) + style.Render(item.Name) + " - " + item.Description + mutedStyle.Render(" · "+action)
 			listLines = append(listLines, truncateCells(line, panelInnerWidth(width)))

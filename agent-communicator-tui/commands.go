@@ -724,6 +724,60 @@ func runConfiguredAgentCmd(name string) tea.Cmd {
 	}
 }
 
+func runConfiguredRemoteAgentCmd(name string, host string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		cmd := broccoliCommsCommandContext(ctx, "run", "--host", host, name, "--json")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return agentConfigSpun{Name: name, Err: fmt.Errorf("%s: %s", err, strings.TrimSpace(string(out)))}
+		}
+		return agentConfigSpun{Name: name}
+	}
+}
+
+func runAgentWithOverridesArgs(isExisting bool, profileName string, host string, cwd string, defaultCWD string, provider string, defaultProv string, optionalArgs string) []string {
+	args := []string{"run"}
+	
+	// 1. Host (Remote)
+	if strings.TrimSpace(host) != "" && host != localHostname() {
+		args = append(args, "--host", host)
+	}
+
+	// 2. CWD Override (only if changed from default configured CWD)
+	if strings.TrimSpace(cwd) != "" && cwd != defaultCWD {
+		args = append(args, "--cwd", strings.TrimSpace(cwd))
+	}
+
+	args = append(args, "--json", profileName)
+
+	// 3. Provider & Args Overrides
+	hasProviderOverride := !isExisting || provider != defaultProv || strings.TrimSpace(optionalArgs) != ""
+	if hasProviderOverride {
+		args = append(args, "--", provider)
+		if strings.TrimSpace(optionalArgs) != "" {
+			args = append(args, strings.Fields(optionalArgs)...)
+		}
+	}
+	return args
+}
+
+func runAgentWithOverridesCmd(isExisting bool, profileName string, host string, cwd string, defaultCWD string, provider string, defaultProv string, optionalArgs string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		args := runAgentWithOverridesArgs(isExisting, profileName, host, cwd, defaultCWD, provider, defaultProv, optionalArgs)
+		cmd := broccoliCommsCommandContext(ctx, args...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return agentConfigSpun{Name: profileName, Err: fmt.Errorf("%s: %s", err, strings.TrimSpace(string(out)))}
+		}
+		return agentConfigSpun{Name: profileName}
+	}
+}
+
 func immutableCopyName(item ConfigSelectionItem) string {
 	base := item.Name
 	if item.TargetAddress != "" {
@@ -758,6 +812,7 @@ func copyAgentImmutableCmd(item ConfigSelectionItem) tea.Cmd {
 
 type ConfigSelectionItem struct {
 	Name          string
+	ProfileName   string
 	Description   string
 	IsRemote      bool
 	IsNewAgent    bool
@@ -769,6 +824,7 @@ type ConfigSelectionItem struct {
 	Launchable    bool
 	Copyable      bool
 	Command       string
+	CWD           string
 	Source        string
 }
 
@@ -783,6 +839,7 @@ type broccoliAgentListPayload struct {
 
 type broccoliAgentListRow struct {
 	Name                string `json:"name"`
+	ProfileName         string `json:"profile_name"`
 	Status              string `json:"status"`
 	ScopeKind           string `json:"scope_kind"`
 	Remote              bool   `json:"remote"`
@@ -834,6 +891,7 @@ func loadConfigItemsFromBroccoliComms(ctx context.Context) ([]ConfigSelectionIte
 		}
 		items = append(items, ConfigSelectionItem{
 			Name:          name,
+			ProfileName:   fallback(row.ProfileName, name),
 			Description:   description,
 			IsRemote:      row.Remote,
 			TrackerID:     row.TrackerID,
@@ -844,6 +902,7 @@ func loadConfigItemsFromBroccoliComms(ctx context.Context) ([]ConfigSelectionIte
 			Launchable:    row.Launchable,
 			Copyable:      row.Copyable,
 			Command:       row.Command,
+			CWD:           row.CWD,
 			Source:        "broccoli-comms",
 		})
 	}
@@ -877,9 +936,24 @@ func loadConfigItemsFromBroccoliComms(ctx context.Context) ([]ConfigSelectionIte
 		})
 	}
 	sort.Slice(items, func(i, j int) bool {
-		if items[i].IsRemote != items[j].IsRemote {
-			return !items[i].IsRemote
+		hostI := fallback(items[i].Hostname, localHostname())
+		hostJ := fallback(items[j].Hostname, localHostname())
+		
+		isLocalI := hostI == localHostname() && !items[i].IsNewAgent
+		isLocalJ := hostJ == localHostname() && !items[j].IsNewAgent
+		
+		if isLocalI != isLocalJ {
+			return isLocalI // Local comes first
 		}
+		
+		if items[i].IsNewAgent != items[j].IsNewAgent {
+			return !items[i].IsNewAgent // Real agents before "new agent" prompts
+		}
+		
+		if hostI != hostJ {
+			return hostI < hostJ
+		}
+		
 		return items[i].Name < items[j].Name
 	})
 	return items, nil
@@ -913,11 +987,33 @@ func (m *model) openRunAgentForm(item ConfigSelectionItem) {
 	m.showingConfigMenu = false
 	m.showingRunAgentForm = true
 	m.runAgentHost = fallback(item.Hostname, localHostname())
+	m.runAgentIsExisting = !item.IsNewAgent
+	m.runAgentProfileName = fallback(item.ProfileName, item.Name)
 	m.runAgentProviders = providerNamesForHost(m.configItems, m.runAgentHost)
-	m.runAgentProvider = firstProviderForForm(m.runAgentProviders)
-	m.runAgentName = nil
-	m.runAgentArgs = nil
-	m.runAgentField = 0
+
+	if m.runAgentIsExisting {
+		m.runAgentName = []rune(item.Name)
+		m.runAgentCWD = []rune(item.CWD)
+		m.runAgentDefaultCWD = item.CWD
+		
+		cmdPart := strings.Fields(item.Command)
+		defaultProv := ""
+		if len(cmdPart) > 0 {
+			defaultProv = cmdPart[0]
+		}
+		m.runAgentDefaultProv = defaultProv
+		m.runAgentProvider = fallback(defaultProv, firstProviderForForm(m.runAgentProviders))
+		m.runAgentArgs = nil
+		m.runAgentField = 1 // Start focus on CWD (field 1) since Name is read-only
+	} else {
+		m.runAgentName = nil
+		m.runAgentCWD = nil
+		m.runAgentDefaultCWD = ""
+		m.runAgentDefaultProv = ""
+		m.runAgentProvider = firstProviderForForm(m.runAgentProviders)
+		m.runAgentArgs = nil
+		m.runAgentField = 0 // Start focus on Name (field 0)
+	}
 	m.runAgentSuggestions = agentNameSuggestionsForHost(m.configItems, m.runAgentHost)
 }
 

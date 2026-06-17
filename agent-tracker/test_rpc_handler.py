@@ -176,6 +176,8 @@ class TestRpcHandler(unittest.TestCase):
                     "status": "idle",
                     "swarms": [{"name": "backend-fix", "role": "subagent"}],
                 }]}
+            def fetch_trackers(self):
+                return 200, {"trackers": []}
 
         with mock.patch.object(registry_client, "load_registry_clients", return_value=[FakeRegistryClient()]):
             result = rpc_handler.handle_list({"include_remote": True})
@@ -2072,6 +2074,9 @@ class TestRpcHandler(unittest.TestCase):
                         "swarms": [{"name": "backend-fix", "role": "subagent"}],
                     },
                 ]}
+
+            def fetch_trackers(self):
+                return 200, {"trackers": []}
 
         state.set_agent("planner", {
             "agent_id": "id-main",

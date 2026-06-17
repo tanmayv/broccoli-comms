@@ -24,6 +24,7 @@ class TestSpinCommand(unittest.TestCase):
              mock.patch.object(ctl, "ensure_tracker_running", return_value=True), \
              mock.patch.dict(os.environ, {"PATH": "/mock/path", "BROCCOLI_COMMS_AGENT_WRAPPER": "/mock/agent-wrapper"}, clear=True), \
              mock.patch("ctl_commands.spin.call_rpc", return_value="proj") as call_rpc, \
+             mock.patch("ctl_commands.spin.agent_contract_template", return_value=None), \
              mock.patch.object(ctl.sys, "argv", ["agent-tracker-ctl", "spin", tmp, "gemini", "--model", "flash"]):
             ctl.main()
             call_rpc.assert_called_once()

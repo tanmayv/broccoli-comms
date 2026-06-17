@@ -159,34 +159,76 @@ def _fetch_registry_agents_for_list() -> dict:
     """Best-effort fetch of remote agents from configured registries."""
     remote_agents = {}
     for client in registry_client.load_registry_clients():
-        status, body = client.fetch_agents()
-        if status != 200:
-            continue
-        registry_name = client.name or "default"
-        for agent in (body or {}).get("agents") or []:
-            hostname = agent.get("hostname")
-            name = agent.get("name")
-            if not hostname or not name:
-                continue
-            base_key = f"{hostname}/{name}"
-            key = base_key
-            if base_key in remote_agents and remote_agents[base_key].get("agent_id") != agent.get("agent_id"):
-                existing = remote_agents.pop(base_key)
-                existing_registry = existing.get("registry_name") or "default"
-                existing_key = f"{existing_registry}:{base_key}"
-                remote_agents[existing_key] = {**existing, "name": existing_key, "target_address": existing_key}
-                key = f"{registry_name}:{base_key}"
-            elif base_key not in remote_agents and any(k.endswith(f":{base_key}") for k in remote_agents):
-                key = f"{registry_name}:{base_key}"
-            remote_agents[key] = {
-                **agent,
-                **state.sanitize_current_task_fields(agent),
-                "name": key,
-                "scope": "remote",
-                "target_address": key,
-                "registry_name": registry_name,
-                "model_type": state.normalize_model_type(agent.get("model_type"), agent.get("agent_type"), agent.get("agent_cmd")),
-            }
+        # 1. Fetch active running agents
+        status_agents, body_agents = client.fetch_agents()
+        if status_agents == 200:
+            registry_name = client.name or "default"
+            for agent in (body_agents or {}).get("agents") or []:
+                hostname = agent.get("hostname")
+                name = agent.get("name")
+                if not hostname or not name:
+                    continue
+                base_key = f"{hostname}/{name}"
+                key = base_key
+                if base_key in remote_agents and remote_agents[base_key].get("agent_id") != agent.get("agent_id"):
+                    existing = remote_agents.pop(base_key)
+                    existing_registry = existing.get("registry_name") or "default"
+                    existing_key = f"{existing_registry}:{base_key}"
+                    remote_agents[existing_key] = {**existing, "name": existing_key, "target_address": existing_key}
+                    key = f"{registry_name}:{base_key}"
+                elif base_key not in remote_agents and any(k.endswith(f":{base_key}") for k in remote_agents):
+                    key = f"{registry_name}:{base_key}"
+                remote_agents[key] = {
+                    **agent,
+                    **state.sanitize_current_task_fields(agent),
+                    "name": key,
+                    "profile_name": name,
+                    "scope": "remote",
+                    "target_address": key,
+                    "registry_name": registry_name,
+                    "running": True,
+                    "model_type": state.normalize_model_type(agent.get("model_type"), agent.get("agent_type"), agent.get("agent_cmd")),
+                }
+
+        # 2. Fetch all trackers to get their configured agents
+        status_trackers, body_trackers = client.fetch_trackers()
+        if status_trackers == 200:
+            registry_name = client.name or "default"
+            for tracker in (body_trackers or {}).get("trackers") or []:
+                tracker_id = tracker.get("tracker_id")
+                hostname = tracker.get("hostname")
+                if not tracker_id or not hostname:
+                    continue
+                # Skip if it is our own local tracker
+                if tracker_id == registry_client.TRACKER_ID:
+                    continue
+                for config in tracker.get("agent_configs") or []:
+                    agent_name = config.get("name")
+                    if not agent_name:
+                        continue
+                    base_key = f"{hostname}/{agent_name}"
+                    # If already present and running, just mark it as configured but don't overwrite running state
+                    if base_key in remote_agents:
+                        remote_agents[base_key]["is_configured"] = True
+                        remote_agents[base_key]["profile_name"] = agent_name
+                        continue
+                    
+                    key = base_key if base_key not in remote_agents else f"{registry_name}:{base_key}"
+                    remote_agents[key] = {
+                        "name": key,
+                        "profile_name": agent_name,
+                        "hostname": hostname,
+                        "tracker_id": tracker_id,
+                        "scope": "remote",
+                        "target_address": key,
+                        "registry_name": registry_name,
+                        "is_configured": True,
+                        "running": False,
+                        "status": "configured",
+                        "launchable": True,
+                        "copyable": True,
+                        "description": config.get("description", ""),
+                    }
     return remote_agents
 
 

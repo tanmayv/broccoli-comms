@@ -178,18 +178,18 @@ def _normalize_registries_json(raw: str) -> str:
 
 def load_registry_clients():
     raw = os.environ.get("AGENT_REGISTRIES_JSON") or config.get("registry", "endpoints", [])
+    configs = []
     if isinstance(raw, str):
         raw = _normalize_registries_json(raw)
-    elif not isinstance(raw, list):
-        raw = []
-    configs = []
-    if raw:
-        try:
-            decoded = json.loads(raw)
-            configs = decoded.get("registries") if isinstance(decoded, dict) else decoded
-        except json.JSONDecodeError:
-            LOG.warning("invalid AGENT_REGISTRIES_JSON; registry sync disabled")
-            configs = []
+        if raw:
+            try:
+                decoded = json.loads(raw)
+                configs = decoded.get("registries") if isinstance(decoded, dict) else decoded
+            except json.JSONDecodeError:
+                LOG.warning("invalid AGENT_REGISTRIES_JSON; registry sync disabled")
+                configs = []
+    elif isinstance(raw, list):
+        configs = raw
     clients = []
     for cfg in configs or []:
         if not isinstance(cfg, dict) or not cfg.get("url"):
