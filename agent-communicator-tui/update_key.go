@@ -29,6 +29,54 @@ func (m model) handleKeyMsg(msg tea.KeyMsg) (model, tea.Cmd) {
 	if m.showingConfigMenu {
 		return m.handleConfigMenuKey(msg)
 	}
+	if msg.Alt && len(msg.Runes) == 1 {
+		r := msg.Runes[0]
+		var targetMode viewMode
+		found := false
+		if r >= '1' && r <= '7' {
+			idx := int(r - '1')
+			tabs := appTabs()
+			if idx < len(tabs) {
+				targetMode = tabs[idx].Mode
+				found = true
+			}
+		} else {
+			switch r {
+			case 'h', 'H':
+				targetMode = homeView
+				found = true
+			case 'c', 'C':
+				targetMode = simpleView
+				found = true
+			case 'w', 'W':
+				targetMode = swarmView
+				found = true
+			case 's', 'S':
+				targetMode = savedView
+				found = true
+			case 'm', 'M':
+				targetMode = memoryView
+				found = true
+			case 't', 'T':
+				targetMode = tasksView
+				found = true
+			case 'l', 'L':
+				targetMode = changelogView
+				found = true
+			}
+		}
+		if found {
+			m.setMode(targetMode)
+			if m.mode == memoryView {
+				m.memoryLoading = true
+			}
+			if m.mode == tasksView {
+				m.tasksLoading = true
+			}
+			m.selectLatestMessage()
+			return m, m.loadActiveTabCmd()
+		}
+	}
 	if isCommandPaletteOpenKey(msg) {
 		m.commandPalette.Open = true
 		m.commandPalette.Query = nil

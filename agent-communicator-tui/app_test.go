@@ -1137,3 +1137,38 @@ func TestExistingAgentRunOverrides(t *testing.T) {
 		t.Fatalf("args = %#v, want %#v", args, want)
 	}
 }
+
+func TestAltShortcutsSwitchTabs(t *testing.T) {
+	m := model{
+		mode:  homeView,
+		local: &fakeLocal{},
+	}
+
+	// 1. Press Alt-2 (should switch to simpleView)
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2"), Alt: true})
+	m = updated.(model)
+	if m.mode != simpleView {
+		t.Fatalf("Alt-2 failed to switch to simpleView, got: %v", m.mode)
+	}
+
+	// 2. Press Alt-6 (should switch to tasksView)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("6"), Alt: true})
+	m = updated.(model)
+	if m.mode != tasksView {
+		t.Fatalf("Alt-6 failed to switch to tasksView, got: %v", m.mode)
+	}
+
+	// 3. Press Alt-h (should switch to homeView)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h"), Alt: true})
+	m = updated.(model)
+	if m.mode != homeView {
+		t.Fatalf("Alt-h failed to switch to homeView, got: %v", m.mode)
+	}
+
+	// 4. Press Alt-m (should switch to memoryView)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("M"), Alt: true})
+	m = updated.(model)
+	if m.mode != memoryView {
+		t.Fatalf("Alt-M failed to switch to memoryView, got: %v", m.mode)
+	}
+}

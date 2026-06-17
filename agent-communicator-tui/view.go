@@ -583,39 +583,70 @@ func (m model) homePanel(width, height int) string {
 	divider := lipgloss.NewStyle().Foreground(colors.Border).Render(strings.Repeat("━", innerW))
 	b.WriteString(divider + "\n\n")
 
-	// Section 1: Welcome
+	// Section 1: Welcome & Tmux Session
 	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(colors.Accent)
 	subStyle := lipgloss.NewStyle().Bold(true).Foreground(colors.AccentAlt)
 	boldStyle := lipgloss.NewStyle().Bold(true).Foreground(colors.TextStrong)
+	italicStyle := lipgloss.NewStyle().Italic(true).Foreground(colors.TextSubtle)
+	
 	b.WriteString(titleStyle.Render("Welcome to Broccoli Comms TUI") + "\n\n")
+	b.WriteString("Broccoli Comms is a task-oriented multi-agent coordination system.\n")
+	b.WriteString("All active agents run inside a dedicated local tmux session named " + boldStyle.Render("AGENTS") + ".\n")
+	b.WriteString("You can attach to it via " + italicStyle.Render("tmux a -t AGENTS") + " in your terminal, though the TUI\n")
+	b.WriteString("provides full monitoring, control, and interaction capabilities.\n\n")
 
-	// Section 2: Core Shortcuts
-	b.WriteString(subStyle.Render("Core Shortcuts:") + "\n")
-	b.WriteString("  " + boldStyle.Render("Ctrl-t (C-t)") + " : Cycle between TUI Tabs\n")
-	b.WriteString("  " + boldStyle.Render("Ctrl-u / Ctrl-d") + " : Scroll messages/instructions Up / Down (also PgUp/PgDn)\n")
-	b.WriteString("  " + boldStyle.Render("Ctrl-n / Ctrl-p") + " : Navigate agent lists\n")
-	b.WriteString("  " + boldStyle.Render("Tab / Shift-Tab") + " : Toggle focus between Active and Remote lists\n\n")
+	// Section 2: Direct Tab Navigation (Alt Shortcuts)
+	b.WriteString(subStyle.Render("Direct Tab Navigation (Alt Shortcuts):") + "\n")
+	b.WriteString("  " + boldStyle.Render("Alt-1") + " or " + boldStyle.Render("Alt-h") + " : Go to " + boldStyle.Render("[Home]") + " (this user guide)\n")
+	b.WriteString("  " + boldStyle.Render("Alt-2") + " or " + boldStyle.Render("Alt-c") + " : Go to " + boldStyle.Render("[Chat]") + " (Simple Chat & composer)\n")
+	b.WriteString("  " + boldStyle.Render("Alt-3") + " or " + boldStyle.Render("Alt-w") + " : Go to " + boldStyle.Render("[Swarm]") + " (Coordinate agent groups)\n")
+	b.WriteString("  " + boldStyle.Render("Alt-4") + " or " + boldStyle.Render("Alt-s") + " : Go to " + boldStyle.Render("[Saved]") + " (Starred messages list)\n")
+	b.WriteString("  " + boldStyle.Render("Alt-5") + " or " + boldStyle.Render("Alt-m") + " : Go to " + boldStyle.Render("[Memory]") + " (Memory Management & audits)\n")
+	b.WriteString("  " + boldStyle.Render("Alt-6") + " or " + boldStyle.Render("Alt-t") + " : Go to " + boldStyle.Render("[Tasks]") + " (Manage task chains)\n")
+	b.WriteString("  " + boldStyle.Render("Alt-7") + " or " + boldStyle.Render("Alt-l") + " : Go to " + boldStyle.Render("[Changelog]") + " (Release notes)\n")
+	b.WriteString("  " + boldStyle.Render("Ctrl-t") + " / " + boldStyle.Render("Ctrl-y") + " : Cycle to Next / Previous Tab\n\n")
 
-	// Section 3: TUI Tabs
-	b.WriteString(subStyle.Render("TUI Tabs:") + "\n")
-	b.WriteString("  " + boldStyle.Render("[Home]") + "     : Welcome screen and usage instructions.\n")
-	b.WriteString("  " + boldStyle.Render("[Chat]") + "     : Track agents, direct chat, and send pane commands.\n")
-	b.WriteString("  " + boldStyle.Render("[Advanced]") + " : View consolidated global event and message history.\n")
-	b.WriteString("  " + boldStyle.Render("[Saved]") + "    : Review bookmarked/saved messages.\n\n")
+	// Section 3: Core Navigation & Scrolling Shortcuts
+	b.WriteString(subStyle.Render("Core Navigation & Scrolling:") + "\n")
+	b.WriteString("  " + boldStyle.Render("Ctrl-u / Ctrl-d") + " : Scroll viewport Up / Down (also PgUp/PgDn)\n")
+	b.WriteString("  " + boldStyle.Render("Ctrl-n / Ctrl-p") + " : Navigate active/remote agent lists\n")
+	b.WriteString("  " + boldStyle.Render("Tab / Shift-Tab") + " : Toggle focus between Active and Remote agent sidebars\n\n")
 
-	// Section 4: Interactive Pane Control
+	// Section 4: Running and Managing Agents
+	b.WriteString(subStyle.Render("Running and Managing Agents:") + "\n")
+	b.WriteString("  - Highlight a remote agent in the sidebar and press " + boldStyle.Render("Enter") + " to open the launch form.\n")
+	b.WriteString("  - Configure the agent's CWD, provider model, CLI args, and click \"Run Agent\".\n")
+	b.WriteString("  - To stop or restart an active agent cooperatively, type " + boldStyle.Render("/restart") + " in the chat.\n")
+	b.WriteString("  - Open the agent actions menu by pressing " + boldStyle.Render("Enter") + " on an active agent card or via " + boldStyle.Render("Ctrl-k") + ".\n\n")
+
+	// Section 5: Durable Memory Management
+	b.WriteString(subStyle.Render("Working with Durable Memory:") + "\n")
+	b.WriteString("  - Agents persist lessons as " + italicStyle.Render("Facts, Habits, Skills, Episodes, or Expertise") + ".\n")
+	b.WriteString("  - After completing tasks, agents propose memory candidates to the persistent database.\n")
+	b.WriteString("  - Go to the " + boldStyle.Render("[Memory] Tab (Alt-5)") + " to audit, approve, or reject pending memory proposals.\n")
+	b.WriteString("  - Keeping memory clean prevents agents from repeating mistakes and ensures high-quality runs.\n\n")
+
+	// Section 6: Interactive Pane Control (in Chat Tab)
 	b.WriteString(subStyle.Render("Interactive Pane Control (in Chat Tab):") + "\n")
-	b.WriteString("  - Type " + boldStyle.Render("/text <text>") + " to send keystrokes directly to the agent's tmux pane.\n")
-	b.WriteString("  - Type " + boldStyle.Render("/keys <keys>") + " to send symbolic keys (e.g. Enter, C-c) to the pane.\n")
-	b.WriteString("  - Press " + boldStyle.Render("Ctrl-x") + " to capture a high-fidelity snapshot of the agent's current pane.\n")
+	b.WriteString("  - Type " + boldStyle.Render("/text <text>") + " to send raw keystrokes directly to the agent's tmux pane.\n")
+	b.WriteString("  - Type " + boldStyle.Render("/keys <keys>") + " to send special keys (e.g., " + boldStyle.Render("/keys Enter") + ", " + boldStyle.Render("/keys Ctrl-c") + ").\n")
+	b.WriteString("  - Press " + boldStyle.Render("Ctrl-x") + " (C-x) to capture a high-fidelity snapshot of the agent's active pane.\n")
+	b.WriteString("  - Press " + boldStyle.Render("Escape") + " to send a default interrupt signal to unstick a busy agent.\n")
 
 	bodyText := b.String()
 	bodyLines := strings.Split(bodyText, "\n")
 
-	// Scroll limits
-	visibleH := height - 2 // Padding/margins
+	// Scroll limits & viewport height calculation
+	visibleH := height - 2
 	totalLines := len(bodyLines)
-	maxOffset := max(0, totalLines-visibleH)
+	
+	contentH := visibleH
+	showFooter := totalLines > visibleH
+	if showFooter {
+		contentH = visibleH - 1
+	}
+
+	maxOffset := max(0, totalLines-contentH)
 	if m.messageOffset > maxOffset {
 		m.messageOffset = maxOffset
 	}
@@ -623,19 +654,27 @@ func (m model) homePanel(width, height int) string {
 		m.messageOffset = 0
 	}
 
-	endLine := min(totalLines, m.messageOffset+visibleH)
+	endLine := min(totalLines, m.messageOffset+contentH)
 	visibleLines := bodyLines[m.messageOffset:endLine]
 
-	var footerText string
-	if totalLines > visibleH {
-		footerText = fmt.Sprintf(" -- scroll with C-u/C-d or PgUp/PgDn (%d-%d/%d) --", m.messageOffset+1, endLine, totalLines)
-		footerText = mutedStyle.Italic(true).Render(footerText)
+	var paddedLines []string
+	for _, line := range visibleLines {
+		paddedLines = append(paddedLines, padStyledLine(line, innerW, colors.BaseBg))
 	}
 
-	renderedBody := strings.Join(visibleLines, "\n")
-	if footerText != "" && len(visibleLines) < visibleH {
-		renderedBody += "\n" + footerText
+	if showFooter {
+		footerText := fmt.Sprintf(" -- scroll with C-u/C-d or PgUp/PgDn (%d-%d/%d) --", m.messageOffset+1, endLine, totalLines)
+		footerRendered := mutedStyle.Italic(true).Render(footerText)
+		paddedLines = append(paddedLines, padStyledLine(footerRendered, innerW, colors.BaseBg))
 	}
+
+	// Pad vertical height with empty styled lines to fill the viewport
+	targetBodyH := height - 1
+	for len(paddedLines) < targetBodyH {
+		paddedLines = append(paddedLines, padStyledLine("", innerW, colors.BaseBg))
+	}
+
+	renderedBody := strings.Join(paddedLines, "\n")
 
 	return lipgloss.NewStyle().
 		Width(width).
@@ -676,8 +715,20 @@ func (m model) changelogPanel(width, height int) string {
 	divider := lipgloss.NewStyle().Foreground(colors.Border).Render(strings.Repeat("━", innerW))
 	b.WriteString(divider + "\n\n")
 
+	// v0.1.4
+	b.WriteString(versionStyle.Render("v0.1.4 (Latest Release)") + "\n")
+	b.WriteString(taglineStyle.Render("Direct Alt shortcuts, comprehensive onboarding guide, and UX polishing") + "\n\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Direct Tab Shortcuts") + ": Switch tabs instantly using Alt+1..7 or Alt+h/c/w/s/m/t/l (works while composing).\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Enhanced Home Tab") + ": Restructured into a complete user guide covering agent launching, memory, pane control, and shortcuts.\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Tmux Session Context") + ": Documented the dedicated AGENTS tmux session where active agent runtimes execute.\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Background Styling & Footer") + ": Solved right-side background viewport coloring issues and fixed scroll footer visibility.\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Version Upgrade") + ": Bumped project and Nix flake packages to version 0.1.4.\n\n")
+
+	// Divider between releases
+	b.WriteString(lipgloss.NewStyle().Foreground(colors.Border).Render(strings.Repeat("─", innerW)) + "\n\n")
+
 	// v0.1.3
-	b.WriteString(versionStyle.Render("v0.1.3 (Latest Release)") + "\n")
+	b.WriteString(versionStyle.Render("v0.1.3") + "\n")
 	b.WriteString(taglineStyle.Render("Focus on onboarding, readability, and platform polishing") + "\n\n")
 	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("TUI [Home] Tab") + ": Implemented a dedicated welcome screen and usage instructions.\n")
 	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Instruction Scrolling") + ": Added smooth vertical scrolling for long-form welcome text to prevent truncation.\n")
@@ -700,10 +751,17 @@ func (m model) changelogPanel(width, height int) string {
 	bodyText := b.String()
 	bodyLines := strings.Split(bodyText, "\n")
 
-	// Scroll management
-	visibleH := height - 2 // Padding/margins
+	// Scroll limits & viewport height calculation
+	visibleH := height - 2
 	totalLines := len(bodyLines)
-	maxOffset := max(0, totalLines-visibleH)
+	
+	contentH := visibleH
+	showFooter := totalLines > visibleH
+	if showFooter {
+		contentH = visibleH - 1
+	}
+
+	maxOffset := max(0, totalLines-contentH)
 	if m.messageOffset > maxOffset {
 		m.messageOffset = maxOffset
 	}
@@ -711,19 +769,27 @@ func (m model) changelogPanel(width, height int) string {
 		m.messageOffset = 0
 	}
 
-	endLine := min(totalLines, m.messageOffset+visibleH)
+	endLine := min(totalLines, m.messageOffset+contentH)
 	visibleLines := bodyLines[m.messageOffset:endLine]
 
-	var footerText string
-	if totalLines > visibleH {
-		footerText = fmt.Sprintf(" -- scroll with C-u/C-d or PgUp/PgDn (%d-%d/%d) --", m.messageOffset+1, endLine, totalLines)
-		footerText = mutedStyle.Italic(true).Render(footerText)
+	var paddedLines []string
+	for _, line := range visibleLines {
+		paddedLines = append(paddedLines, padStyledLine(line, innerW, colors.BaseBg))
 	}
 
-	renderedBody := strings.Join(visibleLines, "\n")
-	if footerText != "" && len(visibleLines) < visibleH {
-		renderedBody += "\n" + footerText
+	if showFooter {
+		footerText := fmt.Sprintf(" -- scroll with C-u/C-d or PgUp/PgDn (%d-%d/%d) --", m.messageOffset+1, endLine, totalLines)
+		footerRendered := mutedStyle.Italic(true).Render(footerText)
+		paddedLines = append(paddedLines, padStyledLine(footerRendered, innerW, colors.BaseBg))
 	}
+
+	// Pad vertical height with empty styled lines to fill the viewport
+	targetBodyH := height - 1
+	for len(paddedLines) < targetBodyH {
+		paddedLines = append(paddedLines, padStyledLine("", innerW, colors.BaseBg))
+	}
+
+	renderedBody := strings.Join(paddedLines, "\n")
 
 	return lipgloss.NewStyle().
 		Width(width).

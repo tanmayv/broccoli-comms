@@ -14,7 +14,7 @@
       lib = nixpkgs.lib;
       systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" "x86_64-darwin" ];
       forAllSystems = f: lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
-      version = "0.1.3";
+      version = "0.1.4";
     in {
       packages = forAllSystems (pkgs:
         let

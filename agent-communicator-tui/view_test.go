@@ -232,9 +232,9 @@ func maxRenderedLineWidth(s string) int {
 }
 
 func TestHomeTabWelcomeScreenRendersASCIIAndShortcuts(t *testing.T) {
-	m := model{width: 80, height: 24, mode: homeView}
-	view := stripANSI(m.homePanel(80, 24))
-	for _, want := range []string{"____", "Welcome to Broccoli Comms TUI", "Ctrl-t", "Core Shortcuts"} {
+	m := model{width: 80, height: 80, mode: homeView}
+	view := stripANSI(m.homePanel(80, 80))
+	for _, want := range []string{"____", "Welcome to Broccoli Comms TUI", "Ctrl-t", "Direct Tab Navigation", "AGENTS", "Working with Durable Memory"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("Home tab rendering missing %q:\n%s", want, view)
 		}
@@ -242,9 +242,9 @@ func TestHomeTabWelcomeScreenRendersASCIIAndShortcuts(t *testing.T) {
 }
 
 func TestChangelogTabRendersReleaseNotes(t *testing.T) {
-	m := model{width: 80, height: 24, mode: changelogView}
-	view := stripANSI(m.changelogPanel(80, 24))
-	for _, want := range []string{"Changelog", "v0.1.3", "TUI [Home] Tab", "v0.1.2"} {
+	m := model{width: 80, height: 80, mode: changelogView}
+	view := stripANSI(m.changelogPanel(80, 80))
+	for _, want := range []string{"Changelog", "v0.1.4", "v0.1.3", "TUI [Home] Tab", "v0.1.2"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("Changelog tab rendering missing %q:\n%s", want, view)
 		}
