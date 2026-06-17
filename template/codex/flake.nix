@@ -29,6 +29,41 @@
         modules = [
           broccoli-comms.homeManagerModules.default
           ./home.nix
+          ({
+            lib,
+            ...
+          }:
+            let
+              bc = setup.broccoli;
+              homeDir = setup.homeDirectory;
+              cacheDir = "${homeDir}/.cache";
+              agentTrackerCfg = bc."agent-tracker" or {};
+            in {
+              services.broccoli-comms = {
+                enable = lib.mkDefault (if bc ? "enable-agent-tracker" then bc."enable-agent-tracker" else bc.enable);
+
+                # Apply tracker/registry and comms options from setup.nix
+                config = {
+                  paths = {
+                    runtimeDir = "${cacheDir}/broccoli-comms/runtime";
+                    cacheDir = "${cacheDir}/broccoli-comms";
+                    configDir = "${homeDir}/.config/broccoli-comms";
+                    agentRootDir = lib.mkDefault bc.agentRootDir;
+                    tmuxSocket = null;
+                    permissionDetectionConfig = null;
+                  };
+
+                  tracker = {
+                    registries = lib.mkDefault (agentTrackerCfg.registries or [ ]);
+                  };
+
+                  registry = {
+                    remoteRunEnabled = lib.mkDefault (bc.remoteRunEnabled or false);
+                    authEnabled = lib.mkDefault (agentTrackerCfg."registry-auth" or bc.authEnabled or false);
+                  };
+                };
+              };
+            })
         ];
       };
     };
