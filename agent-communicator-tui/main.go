@@ -13,7 +13,7 @@ import (
 
 const appName = "agent-communicator"
 
-var version = "dev"
+var version = "0.1.0-test-socket-fix"
 var refreshInterval = 30 * time.Second
 
 type cliConfig struct {
