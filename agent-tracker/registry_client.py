@@ -120,11 +120,11 @@ class RegistryClient:
     def send_remote_pane_input(self, payload):
         return self.request("POST", "/pane-inputs", payload)
 
-    def fetch_agents(self):
-        return self.request("GET", "/agents")
+    def fetch_agents(self, timeout=3):
+        return self.request("GET", "/agents", timeout=timeout)
 
-    def fetch_trackers(self):
-        return self.request("GET", "/trackers")
+    def fetch_trackers(self, timeout=3):
+        return self.request("GET", "/trackers", timeout=timeout)
 
     def set_remote_watch_leases(self, client_id: str, watch_targets: list[str], lease_seconds: float, scope: str = "narrow") -> int:
         status, _ = self.request("POST", f"/trackers/{self.tracker_id}/watch-leases", {

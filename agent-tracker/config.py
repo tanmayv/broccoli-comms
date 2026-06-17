@@ -53,7 +53,7 @@ def get_base_runtime_dir() -> Path:
         return Path(configured)
     xdg_runtime = os.environ.get("XDG_RUNTIME_DIR")
     if xdg_runtime:
-        return Path(xdg_runtime)
+        return Path(xdg_runtime) / "broccoli-comms"
     try:
         uid = os.getuid()
         return Path(f"/tmp/{uid}/broccoli-comms")

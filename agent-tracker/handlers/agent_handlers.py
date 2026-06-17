@@ -155,80 +155,156 @@ def handle_register(params: dict) -> str:
     return agent_name
 
 
+def _fetch_raw_registry_data(client, timeout=1.5) -> tuple:
+    """Fetches raw agents and trackers from a single registry.
+    
+    Returns (registry_name, agents_list, trackers_list, error_msg).
+    """
+    registry_name = client.name or "default"
+    agents = []
+    trackers = []
+    error = None
+    
+    # Fetch agents
+    try:
+        status, body = client.fetch_agents(timeout=timeout)
+        if status == 200:
+            agents = (body or {}).get("agents") or []
+        else:
+            error = f"HTTP {status}"
+    except Exception as e:
+        logging.warning("failed to fetch agents from registry %s: %s", registry_name, e)
+        error = str(e)
+        
+    # Fetch trackers
+    if not error:
+        try:
+            status, body = client.fetch_trackers(timeout=timeout)
+            if status == 200:
+                trackers = (body or {}).get("trackers") or []
+            else:
+                error = f"HTTP {status}"
+        except Exception as e:
+            logging.warning("failed to fetch trackers from registry %s: %s", registry_name, e)
+            error = str(e)
+        
+    return registry_name, agents, trackers, error
+
+
 def _fetch_registry_agents_for_list() -> dict:
     """Best-effort fetch of remote agents from configured registries."""
+    import concurrent.futures
     remote_agents = {}
-    for client in registry_client.load_registry_clients():
-        # 1. Fetch active running agents
-        status_agents, body_agents = client.fetch_agents()
-        if status_agents == 200:
-            registry_name = client.name or "default"
-            for agent in (body_agents or {}).get("agents") or []:
-                hostname = agent.get("hostname")
-                name = agent.get("name")
-                if not hostname or not name:
+    clients = registry_client.load_registry_clients()
+    if not clients:
+        return {}
+        
+    results = []
+    warnings = []
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=len(clients))
+    try:
+        futures = {executor.submit(_fetch_raw_registry_data, client, timeout=1.5): client for client in clients}
+        done, not_done = concurrent.futures.wait(futures.keys(), timeout=2.0)
+        
+        for future in done:
+            try:
+                registry_name, agents, trackers, error = future.result()
+                results.append((registry_name, agents, trackers))
+                if error:
+                    warnings.append((registry_name, f"Registry error: {error}"))
+            except Exception as e:
+                client = futures[future]
+                logging.warning("registry fetch thread raised exception for %s: %s", client.name, e)
+                warnings.append((client.name, f"Exception: {e}"))
+                
+        for future in not_done:
+            client = futures[future]
+            logging.warning("registry fetch timed out for registry %s", client.name)
+            warnings.append((client.name, "Connection timed out"))
+    finally:
+        executor.shutdown(wait=False)
+        
+    # 1. Process successful registry results
+    for registry_name, agents, trackers in results:
+        for agent in agents:
+            hostname = agent.get("hostname")
+            name = agent.get("name")
+            if not hostname or not name:
+                continue
+            base_key = f"{hostname}/{name}"
+            key = base_key
+            if base_key in remote_agents and remote_agents[base_key].get("agent_id") != agent.get("agent_id"):
+                existing = remote_agents.pop(base_key)
+                existing_registry = existing.get("registry_name") or "default"
+                existing_key = f"{existing_registry}:{base_key}"
+                remote_agents[existing_key] = {**existing, "name": existing_key, "target_address": existing_key}
+                key = f"{registry_name}:{base_key}"
+            elif base_key not in remote_agents and any(k.endswith(f":{base_key}") for k in remote_agents):
+                key = f"{registry_name}:{base_key}"
+            remote_agents[key] = {
+                **agent,
+                **state.sanitize_current_task_fields(agent),
+                "name": key,
+                "profile_name": name,
+                "scope": "remote",
+                "target_address": key,
+                "registry_name": registry_name,
+                "running": True,
+                "model_type": state.normalize_model_type(agent.get("model_type"), agent.get("agent_type"), agent.get("agent_cmd")),
+            }
+            
+        for tracker in trackers:
+            tracker_id = tracker.get("tracker_id")
+            hostname = tracker.get("hostname")
+            if not tracker_id or not hostname:
+                continue
+            if tracker_id == registry_client.TRACKER_ID:
+                continue
+            for config in tracker.get("agent_configs") or []:
+                agent_name = config.get("name")
+                if not agent_name:
                     continue
-                base_key = f"{hostname}/{name}"
-                key = base_key
-                if base_key in remote_agents and remote_agents[base_key].get("agent_id") != agent.get("agent_id"):
-                    existing = remote_agents.pop(base_key)
-                    existing_registry = existing.get("registry_name") or "default"
-                    existing_key = f"{existing_registry}:{base_key}"
-                    remote_agents[existing_key] = {**existing, "name": existing_key, "target_address": existing_key}
-                    key = f"{registry_name}:{base_key}"
-                elif base_key not in remote_agents and any(k.endswith(f":{base_key}") for k in remote_agents):
-                    key = f"{registry_name}:{base_key}"
+                base_key = f"{hostname}/{agent_name}"
+                if base_key in remote_agents:
+                    remote_agents[base_key]["is_configured"] = True
+                    remote_agents[base_key]["profile_name"] = agent_name
+                    continue
+                
+                key = base_key if base_key not in remote_agents else f"{registry_name}:{base_key}"
                 remote_agents[key] = {
-                    **agent,
-                    **state.sanitize_current_task_fields(agent),
                     "name": key,
-                    "profile_name": name,
+                    "profile_name": agent_name,
+                    "hostname": hostname,
+                    "tracker_id": tracker_id,
                     "scope": "remote",
                     "target_address": key,
                     "registry_name": registry_name,
-                    "running": True,
-                    "model_type": state.normalize_model_type(agent.get("model_type"), agent.get("agent_type"), agent.get("agent_cmd")),
+                    "is_configured": True,
+                    "running": False,
+                    "status": "configured",
+                    "launchable": True,
+                    "copyable": True,
+                    "description": config.get("description", ""),
                 }
 
-        # 2. Fetch all trackers to get their configured agents
-        status_trackers, body_trackers = client.fetch_trackers()
-        if status_trackers == 200:
-            registry_name = client.name or "default"
-            for tracker in (body_trackers or {}).get("trackers") or []:
-                tracker_id = tracker.get("tracker_id")
-                hostname = tracker.get("hostname")
-                if not tracker_id or not hostname:
-                    continue
-                # Skip if it is our own local tracker
-                if tracker_id == registry_client.TRACKER_ID:
-                    continue
-                for config in tracker.get("agent_configs") or []:
-                    agent_name = config.get("name")
-                    if not agent_name:
-                        continue
-                    base_key = f"{hostname}/{agent_name}"
-                    # If already present and running, just mark it as configured but don't overwrite running state
-                    if base_key in remote_agents:
-                        remote_agents[base_key]["is_configured"] = True
-                        remote_agents[base_key]["profile_name"] = agent_name
-                        continue
-                    
-                    key = base_key if base_key not in remote_agents else f"{registry_name}:{base_key}"
-                    remote_agents[key] = {
-                        "name": key,
-                        "profile_name": agent_name,
-                        "hostname": hostname,
-                        "tracker_id": tracker_id,
-                        "scope": "remote",
-                        "target_address": key,
-                        "registry_name": registry_name,
-                        "is_configured": True,
-                        "running": False,
-                        "status": "configured",
-                        "launchable": True,
-                        "copyable": True,
-                        "description": config.get("description", ""),
-                    }
+    # 2. Inject virtual error agents for any warnings/timeouts
+    for registry_name, error_msg in warnings:
+        key = f"registry-error/{registry_name}"
+        remote_agents[key] = {
+            "name": f"⚠️ Registry '{registry_name}' offline",
+            "agent_id": f"error-{registry_name}",
+            "uuid": f"error-{registry_name}",
+            "scope": "remote",
+            "status": "offline",
+            "registry_name": registry_name,
+            "agent_type": "error",
+            "agent_cmd": "error",
+            "model_type": "error",
+            "cwd": error_msg,
+            "running": False,
+            "is_configured": True,
+        }
+
     return remote_agents
 
 

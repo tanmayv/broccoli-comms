@@ -474,6 +474,9 @@ in {
       home.activation.restartBroccoliCommsTracker = lib.hm.dag.entryAfter [ "setupLaunchAgents" ] ''
         label="org.nix-community.home.broccoli-comms-agent-tracker"
         domain="gui/$(id -u)"
+        if ! /bin/launchctl print "$domain" >/dev/null 2>&1; then
+          domain="user/$(id -u)"
+        fi
         service="$domain/$label"
         plist="$HOME/Library/LaunchAgents/$label.plist"
         if [ -f "$plist" ]; then
@@ -526,6 +529,9 @@ in {
       home.activation.restartBroccoliCommsRegistry = lib.hm.dag.entryAfter [ "setupLaunchAgents" ] ''
         label="org.nix-community.home.broccoli-comms-agent-registry"
         domain="gui/$(id -u)"
+        if ! /bin/launchctl print "$domain" >/dev/null 2>&1; then
+          domain="user/$(id -u)"
+        fi
         service="$domain/$label"
         plist="$HOME/Library/LaunchAgents/$label.plist"
         if [ -f "$plist" ]; then

@@ -97,7 +97,7 @@ def get_socket():
         return os.path.join(runtime_dir, "agent-tracker.sock")
     xdg_runtime = os.environ.get("XDG_RUNTIME_DIR")
     if xdg_runtime:
-        return os.path.join(xdg_runtime, "agent-tracker.sock")
+        return os.path.join(xdg_runtime, "broccoli-comms/agent-tracker.sock")
     try:
         uid = os.getuid()
         return f"/tmp/{uid}/broccoli-comms/agent-tracker.sock"
@@ -188,7 +188,7 @@ def get_socket():
         return os.path.join(runtime_dir, "agent-tracker.sock")
     xdg_runtime = os.environ.get("XDG_RUNTIME_DIR")
     if xdg_runtime:
-        return os.path.join(xdg_runtime, "agent-tracker.sock")
+        return os.path.join(xdg_runtime, "broccoli-comms/agent-tracker.sock")
     try:
         uid = os.getuid()
         return f"/tmp/{uid}/broccoli-comms/agent-tracker.sock"
@@ -236,7 +236,7 @@ def get_socket():
         return os.path.join(runtime_dir, "agent-tracker.sock")
     xdg_runtime = os.environ.get("XDG_RUNTIME_DIR")
     if xdg_runtime:
-        return os.path.join(xdg_runtime, "agent-tracker.sock")
+        return os.path.join(xdg_runtime, "broccoli-comms/agent-tracker.sock")
     try:
         uid = os.getuid()
         return f"/tmp/{uid}/broccoli-comms/agent-tracker.sock"
