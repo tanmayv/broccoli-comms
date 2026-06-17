@@ -28,9 +28,11 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		m.selectLatestMessage()
 		return m, m.reloadMessages()
 	}
-	if mode, ok := m.mouseInputMode(event.X, event.Y); ok {
-		m.inputMode = mode
-		return m, nil
+	if m.activeTabCanCompose() {
+		if mode, ok := m.mouseInputMode(event.X, event.Y); ok {
+			m.inputMode = mode
+			return m, nil
+		}
 	}
 	return m, nil
 }

@@ -10,15 +10,15 @@ import (
 )
 
 func TestTabBarRendersActiveMode(t *testing.T) {
-	m := model{width: 160, mode: swarmView, health: tracker.TrackerInfo{Build: tracker.BuildInfo{Display: "0.1.2"}}}
+	m := model{width: 160, mode: swarmView, health: tracker.TrackerInfo{Build: tracker.BuildInfo{Display: "0.1.3"}}}
 	oldVersion := version
-	version = "0.1.2"
+	version = "0.1.3"
 	defer func() { version = oldVersion }()
 	bar := m.bottomTabBar(m.width)
-	if !strings.Contains(bar, "ui 0.1.2") || !strings.Contains(bar, "tracker 0.1.2") {
+	if !strings.Contains(bar, "ui 0.1.3") || !strings.Contains(bar, "tracker 0.1.3") {
 		t.Fatalf("tab bar missing version diagnostics: %q", bar)
 	}
-	for _, want := range []string{"Simple Chat", "Swarm Mode", "Saved Messages", "Memory Management", "Tasks"} {
+	for _, want := range []string{"Home", "Simple Chat", "Swarm Mode", "Saved Messages", "Memory Management", "Tasks", "Changelog"} {
 		if !strings.Contains(bar, want) {
 			t.Fatalf("tab bar missing %q: %q", want, bar)
 		}
@@ -34,8 +34,13 @@ func TestTabBarRendersActiveMode(t *testing.T) {
 }
 
 func TestAppTabSwitchingWithCtrlTAndCtrlY(t *testing.T) {
-	m := model{local: &fakeLocal{}}
+	m := model{local: &fakeLocal{}, mode: homeView}
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+	m = updated.(model)
+	if m.mode != simpleView {
+		t.Fatalf("ctrl-t from home mode = %v, want simple", m.mode)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
 	m = updated.(model)
 	if m.mode != swarmView {
 		t.Fatalf("ctrl-t from simple mode = %v, want swarm", m.mode)
@@ -57,13 +62,18 @@ func TestAppTabSwitchingWithCtrlTAndCtrlY(t *testing.T) {
 	}
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
 	m = updated.(model)
-	if m.mode != simpleView {
-		t.Fatalf("fifth ctrl-t mode = %v, want simple", m.mode)
+	if m.mode != changelogView {
+		t.Fatalf("fifth ctrl-t mode = %v, want changelog", m.mode)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+	m = updated.(model)
+	if m.mode != homeView {
+		t.Fatalf("sixth ctrl-t mode = %v, want home", m.mode)
 	}
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlY})
 	m = updated.(model)
-	if m.mode != tasksView {
-		t.Fatalf("ctrl-y from simple mode = %v, want tasks", m.mode)
+	if m.mode != changelogView {
+		t.Fatalf("ctrl-y from home mode = %v, want changelog", m.mode)
 	}
 }
 
@@ -113,7 +123,7 @@ func TestTabsAreDataDriven(t *testing.T) {
 	defer func() { registeredAppTabs = oldTabs }()
 	fakeMode := viewMode(99)
 	registeredAppTabs = append(append([]appTab(nil), registeredAppTabs...), appTab{ID: "fake", Mode: fakeMode, Label: "Fake Tab", ShortLabel: "Fake"})
-	m := model{mode: tasksView, width: 160}
+	m := model{mode: changelogView, width: 160}
 	m.selectTab(1)
 	if m.mode != fakeMode {
 		t.Fatalf("data-driven tab cycle mode=%v want fake", m.mode)
@@ -130,7 +140,7 @@ func TestBottomTabBarCompactsWhenManyTabsOrNarrowWidth(t *testing.T) {
 	for i := 0; i < 8; i++ {
 		registeredAppTabs = append(registeredAppTabs, appTab{ID: "extra", Mode: viewMode(100 + i), Label: "Extra Long Future Tab", ShortLabel: "Extra"})
 	}
-	m := model{width: 42}
+	m := model{width: 55}
 	bar := m.bottomTabBar(m.width)
 	if got := lipgloss.Width(bar); got > m.width {
 		t.Fatalf("tab bar width=%d want <= %d: %q", got, m.width, bar)

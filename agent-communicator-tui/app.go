@@ -22,6 +22,8 @@ const (
 	savedView
 	memoryView
 	tasksView
+	homeView
+	changelogView
 )
 
 type runtimeInfo struct {
@@ -181,6 +183,7 @@ func newModel(local localClient, ownName string) model {
 		local:             local,
 		ownName:           ownName,
 		runtime:           runtimeInfoFromEnv(),
+		mode:              homeView,
 		sentMessages:      map[string][]tracker.Message{},
 		unreadRows:        map[string]bool{},
 		unreadCounts:      map[string]int{},

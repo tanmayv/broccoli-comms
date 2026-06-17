@@ -303,6 +303,9 @@ func (m model) handleKeyMsg(msg tea.KeyMsg) (model, tea.Cmd) {
 			m.selectNextInSection(-1)
 			m.scrollSelectedAgentIntoView()
 			m.selectLatestMessage()
+			if m.mode == homeView || m.mode == changelogView {
+				m.mode = simpleView
+			}
 			return m, m.reloadMessages()
 		}
 	case tea.KeyCtrlN:
@@ -320,6 +323,9 @@ func (m model) handleKeyMsg(msg tea.KeyMsg) (model, tea.Cmd) {
 			m.selectNextInSection(1)
 			m.scrollSelectedAgentIntoView()
 			m.selectLatestMessage()
+			if m.mode == homeView || m.mode == changelogView {
+				m.mode = simpleView
+			}
 			return m, m.reloadMessages()
 		}
 	case tea.KeyTab, tea.KeyShiftTab:
@@ -355,9 +361,17 @@ func (m model) handleKeyMsg(msg tea.KeyMsg) (model, tea.Cmd) {
 			m.scrollSelectedMessageIntoView()
 		}
 	case tea.KeyPgUp, tea.KeyCtrlU:
-		m.scrollMessageViewport(-messagePageSize(m.height))
+		if m.mode == homeView || m.mode == changelogView {
+			m.messageOffset = max(0, m.messageOffset-messagePageSize(m.height))
+		} else {
+			m.scrollMessageViewport(-messagePageSize(m.height))
+		}
 	case tea.KeyPgDown, tea.KeyCtrlD:
-		m.scrollMessageViewport(messagePageSize(m.height))
+		if m.mode == homeView || m.mode == changelogView {
+			m.messageOffset = m.messageOffset + messagePageSize(m.height)
+		} else {
+			m.scrollMessageViewport(messagePageSize(m.height))
+		}
 	case tea.KeyF1:
 		if m.activeTabCanCompose() {
 			m.inputMode = inputModeMessage
@@ -398,9 +412,12 @@ func (m model) handleKeyMsg(msg tea.KeyMsg) (model, tea.Cmd) {
 		if len(msg.Runes) == 1 && msg.Runes[0] == 'r' && len(m.composer) == 0 && m.err != nil && m.retryOperation != "" {
 			return m, m.retryCurrentOperation()
 		}
-		if len(msg.Runes) == 1 && msg.Runes[0] == 'n' && len(m.composer) == 0 && m.activeTabCanCompose() && m.selectNextUnread() {
+		if len(msg.Runes) == 1 && msg.Runes[0] == 'n' && len(m.composer) == 0 && (m.activeTabCanCompose() || m.mode == homeView || m.mode == changelogView) && m.selectNextUnread() {
 			m.scrollSelectedAgentIntoView()
 			m.selectLatestMessage()
+			if m.mode == homeView || m.mode == changelogView {
+				m.mode = simpleView
+			}
 			return m, m.reloadMessages()
 		}
 		if m.activeTabCanCompose() {

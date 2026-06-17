@@ -18,11 +18,13 @@ type appTab struct {
 }
 
 var registeredAppTabs = []appTab{
+	{ID: "home", Mode: homeView, Label: "Home", ShortLabel: "Home", Help: "welcome and TUI usage instructions", CanCompose: false, Load: nil},
 	{ID: "simple", Mode: simpleView, Label: "Simple Chat", ShortLabel: "Simple", Help: "focused conversation", CanCompose: true, Load: loadSimpleTabMessages},
 	{ID: "swarm", Mode: swarmView, Label: "Swarm Mode", ShortLabel: "Swarm", Help: "coordinate agent groups", CanCompose: true, Load: loadSwarmTab},
 	{ID: "saved", Mode: savedView, Label: "Saved Messages", ShortLabel: "Saved", Help: "starred messages", CanCompose: false, Load: loadSavedTabMessages},
 	{ID: "memory", Mode: memoryView, Label: "Memory Management", ShortLabel: "Memory", Help: "review and maintain durable memory", CanCompose: false, Load: loadMemoryTab},
 	{ID: "tasks", Mode: tasksView, Label: "Tasks", ShortLabel: "Tasks", Help: "manage task chains", CanCompose: false, Load: loadTasksTab},
+	{ID: "changelog", Mode: changelogView, Label: "Changelog", ShortLabel: "Changelog", Help: "release notes", CanCompose: false, Load: nil},
 }
 
 func loadSimpleTabMessages(m model) tea.Cmd {

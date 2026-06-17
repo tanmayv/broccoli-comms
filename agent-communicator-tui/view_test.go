@@ -1,6 +1,7 @@
 package main
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -228,4 +229,30 @@ func maxRenderedLineWidth(s string) int {
 		}
 	}
 	return maxWidth
+}
+
+func TestHomeTabWelcomeScreenRendersASCIIAndShortcuts(t *testing.T) {
+	m := model{width: 80, height: 24, mode: homeView}
+	view := stripANSI(m.homePanel(80, 24))
+	for _, want := range []string{"____", "Welcome to Broccoli Comms TUI", "Ctrl-t", "Core Shortcuts"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("Home tab rendering missing %q:\n%s", want, view)
+		}
+	}
+}
+
+func TestChangelogTabRendersReleaseNotes(t *testing.T) {
+	m := model{width: 80, height: 24, mode: changelogView}
+	view := stripANSI(m.changelogPanel(80, 24))
+	for _, want := range []string{"Changelog", "v0.1.3", "TUI [Home] Tab", "v0.1.2"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("Changelog tab rendering missing %q:\n%s", want, view)
+		}
+	}
+}
+
+var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+
+func stripANSI(s string) string {
+	return ansiRegex.ReplaceAllString(s, "")
 }

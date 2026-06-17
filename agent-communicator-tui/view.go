@@ -59,6 +59,12 @@ func (m model) baseView() string {
 }
 
 func (m model) mainContentView(bodyH int) string {
+	if m.mode == homeView {
+		return truncateLines(m.homePanel(m.width, bodyH), bodyH)
+	}
+	if m.mode == changelogView {
+		return truncateLines(m.changelogPanel(m.width, bodyH), bodyH)
+	}
 	if m.mode == memoryView {
 		return truncateLines(m.memoryManagementView(m.width, bodyH), bodyH)
 	}
@@ -528,4 +534,203 @@ func (m model) renderConfigMenu(width, height int) string {
 	title := titleStyle.Render("Agents (copy/run new)")
 	boxContent := title + "\n" + mutedStyle.Render("Search: "+query+"  ·  Enter copies live agents or opens run-new form") + "\n\n" + body
 	return box(boxContent, width, height)
+}
+
+func (m model) homePanel(width, height int) string {
+	padX := 3
+	if width < 70 {
+		padX = 1
+	}
+	innerW := max(1, width-(padX*2))
+
+	// ASCII Art (centered)
+	ascii := []string{
+		"  ____                             _ _   ____",
+		" | __ ) _ __ ___   ___  ___  ___  | (_) / ___|___  _ __ ___  _ __ ___  ___",
+		" |  _ \\| '__/ _ \\ / __|/ __|/ _ \\ | | |/ /   / _ \\| '_ ` _ \\| '_ ` _ \\/ __|",
+		" | |_) | | | (_) | (__| (__| (_) || | | |__| (_) | | | | | | | | | | \\__ \\",
+		" |____/|_|  \\___/ \\___|\\___|\\___/ |_|_|\\____\\___/|_| |_| |_|_| |_| |_|___/",
+	}
+
+	var asciiLines []string
+	for _, line := range ascii {
+		if len(line) < innerW {
+			padding := (innerW - len(line)) / 2
+			asciiLines = append(asciiLines, strings.Repeat(" ", padding)+line)
+		} else {
+			asciiLines = append(asciiLines, line)
+		}
+	}
+	asciiText := lipgloss.NewStyle().Foreground(colors.Accent).Bold(true).Render(strings.Join(asciiLines, "\n"))
+
+	// Tagline (centered)
+	tagline := "Decentralized, task-oriented multi-agent communications protocol."
+	var taglineText string
+	taglineStyle := lipgloss.NewStyle().Foreground(colors.Muted).Italic(true)
+	if len(tagline) < innerW {
+		padding := (innerW - len(tagline)) / 2
+		taglineText = strings.Repeat(" ", padding) + taglineStyle.Render(tagline)
+	} else {
+		taglineText = taglineStyle.Render(tagline)
+	}
+
+	// Content Builder
+	var b strings.Builder
+	b.WriteString(asciiText + "\n\n")
+	b.WriteString(taglineText + "\n\n")
+
+	// Divider
+	divider := lipgloss.NewStyle().Foreground(colors.Border).Render(strings.Repeat("━", innerW))
+	b.WriteString(divider + "\n\n")
+
+	// Section 1: Welcome
+	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(colors.Accent)
+	subStyle := lipgloss.NewStyle().Bold(true).Foreground(colors.AccentAlt)
+	boldStyle := lipgloss.NewStyle().Bold(true).Foreground(colors.TextStrong)
+	b.WriteString(titleStyle.Render("Welcome to Broccoli Comms TUI") + "\n\n")
+
+	// Section 2: Core Shortcuts
+	b.WriteString(subStyle.Render("Core Shortcuts:") + "\n")
+	b.WriteString("  " + boldStyle.Render("Ctrl-t (C-t)") + " : Cycle between TUI Tabs\n")
+	b.WriteString("  " + boldStyle.Render("Ctrl-u / Ctrl-d") + " : Scroll messages/instructions Up / Down (also PgUp/PgDn)\n")
+	b.WriteString("  " + boldStyle.Render("Ctrl-n / Ctrl-p") + " : Navigate agent lists\n")
+	b.WriteString("  " + boldStyle.Render("Tab / Shift-Tab") + " : Toggle focus between Active and Remote lists\n\n")
+
+	// Section 3: TUI Tabs
+	b.WriteString(subStyle.Render("TUI Tabs:") + "\n")
+	b.WriteString("  " + boldStyle.Render("[Home]") + "     : Welcome screen and usage instructions.\n")
+	b.WriteString("  " + boldStyle.Render("[Chat]") + "     : Track agents, direct chat, and send pane commands.\n")
+	b.WriteString("  " + boldStyle.Render("[Advanced]") + " : View consolidated global event and message history.\n")
+	b.WriteString("  " + boldStyle.Render("[Saved]") + "    : Review bookmarked/saved messages.\n\n")
+
+	// Section 4: Interactive Pane Control
+	b.WriteString(subStyle.Render("Interactive Pane Control (in Chat Tab):") + "\n")
+	b.WriteString("  - Type " + boldStyle.Render("/text <text>") + " to send keystrokes directly to the agent's tmux pane.\n")
+	b.WriteString("  - Type " + boldStyle.Render("/keys <keys>") + " to send symbolic keys (e.g. Enter, C-c) to the pane.\n")
+	b.WriteString("  - Press " + boldStyle.Render("Ctrl-x") + " to capture a high-fidelity snapshot of the agent's current pane.\n")
+
+	bodyText := b.String()
+	bodyLines := strings.Split(bodyText, "\n")
+
+	// Scroll limits
+	visibleH := height - 2 // Padding/margins
+	totalLines := len(bodyLines)
+	maxOffset := max(0, totalLines-visibleH)
+	if m.messageOffset > maxOffset {
+		m.messageOffset = maxOffset
+	}
+	if m.messageOffset < 0 {
+		m.messageOffset = 0
+	}
+
+	endLine := min(totalLines, m.messageOffset+visibleH)
+	visibleLines := bodyLines[m.messageOffset:endLine]
+
+	var footerText string
+	if totalLines > visibleH {
+		footerText = fmt.Sprintf(" -- scroll with C-u/C-d or PgUp/PgDn (%d-%d/%d) --", m.messageOffset+1, endLine, totalLines)
+		footerText = mutedStyle.Italic(true).Render(footerText)
+	}
+
+	renderedBody := strings.Join(visibleLines, "\n")
+	if footerText != "" && len(visibleLines) < visibleH {
+		renderedBody += "\n" + footerText
+	}
+
+	return lipgloss.NewStyle().
+		Width(width).
+		Height(height).
+		MaxWidth(width).
+		MaxHeight(height).
+		Padding(1, padX, 0, padX).
+		Background(colors.BaseBg).
+		Render(renderedBody)
+}
+
+func (m model) changelogPanel(width, height int) string {
+	padX := 3
+	if width < 70 {
+		padX = 1
+	}
+	innerW := max(1, width-(padX*2))
+
+	// Styles
+	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(colors.Accent).Underline(true)
+	versionStyle := lipgloss.NewStyle().Bold(true).Foreground(colors.AccentStrong)
+	bulletStyle := lipgloss.NewStyle().Foreground(colors.Success)
+	taglineStyle := lipgloss.NewStyle().Foreground(colors.Muted).Italic(true)
+	boldStyle := lipgloss.NewStyle().Bold(true).Foreground(colors.TextStrong)
+
+	var b strings.Builder
+
+	// Title
+	titleText := "Agent Communicator Changelog"
+	if len(titleText) < innerW {
+		padding := (innerW - len(titleText)) / 2
+		b.WriteString(strings.Repeat(" ", padding) + titleStyle.Render(titleText) + "\n\n")
+	} else {
+		b.WriteString(titleStyle.Render(titleText) + "\n\n")
+	}
+
+	// Divider
+	divider := lipgloss.NewStyle().Foreground(colors.Border).Render(strings.Repeat("━", innerW))
+	b.WriteString(divider + "\n\n")
+
+	// v0.1.3
+	b.WriteString(versionStyle.Render("v0.1.3 (Latest Release)") + "\n")
+	b.WriteString(taglineStyle.Render("Focus on onboarding, readability, and platform polishing") + "\n\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("TUI [Home] Tab") + ": Implemented a dedicated welcome screen and usage instructions.\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Instruction Scrolling") + ": Added smooth vertical scrolling for long-form welcome text to prevent truncation.\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Version Upgrade") + ": Bumped project and Nix flake packages to version 0.1.3.\n\n")
+
+	// Divider between releases
+	b.WriteString(lipgloss.NewStyle().Foreground(colors.Border).Render(strings.Repeat("─", innerW)) + "\n\n")
+
+	// v0.1.2
+	b.WriteString(versionStyle.Render("v0.1.2") + "\n")
+	b.WriteString(taglineStyle.Render("Major feature release adding local tmux integration and TUI control loops") + "\n\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Tmux Status Bar & Click Actions") + ": Interactive session list, agent status tracking, and click-to-focus mouse binds.\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Pane Borders & Titles") + ": Pane borders styled with active @agent_name and task titles.\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Interactive Pane Control") + ": Added /text and /keys composer commands to send inputs directly to agent panes.\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("High-Fidelity Pane Snapshots") + ": Added Ctrl-x (C-x) to capture and deliver high-fidelity active pane snapshots.\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Default Interrupt Flag") + ": Enabled automatic Escape-key pre-delivery interrupts to unstick busy agents.\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Cooperative Agent Restart") + ": Added TUI /restart slash command and tracker 'request-stop'/'restart' RPC handlers.\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Mouse Alternate Screen Scrolling") + ": Custom WheelUp/WheelDown mouse scrolling for alternate screen applications.\n\n")
+
+	bodyText := b.String()
+	bodyLines := strings.Split(bodyText, "\n")
+
+	// Scroll management
+	visibleH := height - 2 // Padding/margins
+	totalLines := len(bodyLines)
+	maxOffset := max(0, totalLines-visibleH)
+	if m.messageOffset > maxOffset {
+		m.messageOffset = maxOffset
+	}
+	if m.messageOffset < 0 {
+		m.messageOffset = 0
+	}
+
+	endLine := min(totalLines, m.messageOffset+visibleH)
+	visibleLines := bodyLines[m.messageOffset:endLine]
+
+	var footerText string
+	if totalLines > visibleH {
+		footerText = fmt.Sprintf(" -- scroll with C-u/C-d or PgUp/PgDn (%d-%d/%d) --", m.messageOffset+1, endLine, totalLines)
+		footerText = mutedStyle.Italic(true).Render(footerText)
+	}
+
+	renderedBody := strings.Join(visibleLines, "\n")
+	if footerText != "" && len(visibleLines) < visibleH {
+		renderedBody += "\n" + footerText
+	}
+
+	return lipgloss.NewStyle().
+		Width(width).
+		Height(height).
+		MaxWidth(width).
+		MaxHeight(height).
+		Padding(1, padX, 0, padX).
+		Background(colors.BaseBg).
+		Render(renderedBody)
 }
