@@ -1,9 +1,15 @@
-{ config, pkgs, lib, ... }: {
+{ config, pkgs, lib, inputs, ... }: {
   # Home Manager needs a bit of information about you and the
   # paths it should manage.
   # IMPORTANT: Update these placeholders with your actual username and home directory!
-  home.username = lib.mkDefault "change-me";
-  home.homeDirectory = lib.mkDefault "/home/change-me";
+  # Auto-detect username and home directory in impure mode, fallback to placeholders in pure mode
+  home.username = let
+    envUser = builtins.getEnv "USER";
+  in lib.mkDefault (if envUser != "" then envUser else "change-me");
+
+  home.homeDirectory = let
+    envHome = builtins.getEnv "HOME";
+  in lib.mkDefault (if envHome != "" then envHome else "/home/change-me");
 
   # This value determines the Home Manager release that your
   # configuration is compatible with. This helps avoid breakage
@@ -21,6 +27,9 @@
     tmux
     git
     curl
+
+    # The Pi coding agent binary from pi.nix flake
+    inputs.pi-nix.packages.${pkgs.system}.default
   ];
 
   # Enable the Broccoli Comms agent tracker service

@@ -11,15 +11,23 @@
       url = "github:tanmayv/broccoli-comms";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    pi-nix = {
+      url = "github:lukasl-dev/pi.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, home-manager, broccoli-comms }@inputs:
+  outputs = { self, nixpkgs, home-manager, broccoli-comms, pi-nix }@inputs:
     let
-      system = "x86_64-linux";
+      # Auto-detect system in impure mode, fallback to x86_64-linux in pure mode
+      system = let
+        current = builtins.currentSystem or "";
+      in if current != "" then current else "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
     in {
       homeConfigurations.codex = home-manager.lib.homeManagerConfiguration {
         inherit pkgs;
+        extraSpecialArgs = { inherit inputs; };
         modules = [
           broccoli-comms.homeManagerModules.default
           ./home.nix
