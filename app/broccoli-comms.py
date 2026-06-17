@@ -871,6 +871,7 @@ def managed_agent_launch_command(
     immutable: bool = False,
     agents_dir: str | None = None,
     context_layout: str = "legacy",
+    wait: bool = False,
 ) -> str:
     launch_cwd = launch_cwd or cwd
     command_args = _parse_command_for_bootstrap(command)
@@ -904,6 +905,8 @@ def managed_agent_launch_command(
         launch_parts.append("BROCCOLI_COMMS_NON_LEARNING=1")
     if normalized_swarms:
         launch_parts.append(f"AGENT_SWARMS_JSON={shlex.quote(json.dumps(normalized_swarms, separators=(',', ':')))}")
+    if wait:
+        launch_parts.append("BROCCOLI_COMMS_WAIT=1")
     launch_parts.extend(shlex.quote(part) for part in launcher)
     launch_parts.extend(shlex.quote(part) for part in command_args)
     return " ".join(launch_parts)
@@ -1824,6 +1827,8 @@ def run_remote(args: argparse.Namespace, command: list[str]) -> None:
     if source_tracker_id:
         payload["source_tracker_id"] = source_tracker_id
         payload["reply_to_tracker_id"] = source_tracker_id
+    if getattr(args, "wait", None):
+        payload["wait"] = True
     publish = tracker_rpc("publish_tracker_event", {"target_tracker_id": tracker["tracker_id"], "event_type": "remote_run_request", "payload": payload}, timeout=10.0)
     if not isinstance(publish, dict) or not publish.get("success"):
         raise SystemExit(f"failed to publish remote_run_request to {args.host}")
@@ -1909,6 +1914,7 @@ def run(args: argparse.Namespace) -> None:
         immutable=immutable,
         agents_dir=agents_dir,
         context_layout=context_layout,
+        wait=bool(getattr(args, "wait", False)),
     )
 
     result = tmux(
@@ -3989,6 +3995,7 @@ def main() -> None:
     run_parser.add_argument("--role", action="append", choices=sorted(VALID_SWARM_ROLES), help="Swarm role for the preceding --swarm")
     run_parser.add_argument("--json", action="store_true", help="Emit JSON start result")
     run_parser.add_argument("--default-agent-command", help="Command to use when NAME is not configured and no command is passed after --")
+    run_parser.add_argument("--wait", action="store_true", help="Wait after execution (sleep) so pane/window does not close immediately")
     run_parser.add_argument("command", nargs=argparse.REMAINDER, help="Command to run after --")
     run_parser.set_defaults(func=run)
 

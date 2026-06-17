@@ -760,6 +760,7 @@ def _normalize_remote_run_payload(payload: dict) -> dict:
     reply_to_tracker_id = _remote_run_first_str(payload, ["reply_to_tracker_id", "source_tracker_id"], max_len=REMOTE_RUN_ID_MAX)
     source_tracker_id = _remote_run_first_str(payload, ["source_tracker_id", "reply_to_tracker_id"], max_len=REMOTE_RUN_ID_MAX)
     session = _remote_run_optional_str(payload, "session", max_len=REMOTE_RUN_ID_MAX)
+    wait = bool(payload.get("wait"))
     return {
         "request_id": request_id,
         "agent": agent,
@@ -769,6 +770,7 @@ def _normalize_remote_run_payload(payload: dict) -> dict:
         "reply_to_tracker_id": reply_to_tracker_id,
         "source_tracker_id": source_tracker_id,
         "session": session,
+        "wait": wait,
     }
 
 
@@ -784,6 +786,8 @@ def _broccoli_comms_run_argv(req: dict) -> list[str]:
         argv.extend(["--cwd", req["cwd"]])
     if req.get("scope"):
         argv.extend(["--scope", req["scope"]])
+    if req.get("wait"):
+        argv.append("--wait")
     command = req.get("command")
     if command:
         argv.append("--")

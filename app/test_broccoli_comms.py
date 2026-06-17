@@ -1017,7 +1017,8 @@ agent_communicator_tui = "/config/agent-communicator"
         self.assertIn("repo:test", command[2])
 
     def test_bootstrap_context_writes_agents_md_with_absolute_context_and_skill_summary(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.dict(os.environ, {"BROCCOLI_AGENTS_DIR": "", "BROCCOLI_COMMS_CONTEXT_LAYOUT": ""}):
             payload = {
                 "agents_md": "# Agent Operating Contract\n",
                 "memory": [
@@ -1386,6 +1387,86 @@ full_expertise = true
             with self.assertRaises(SystemExit) as cm:
                 broccoli_comms_app.agent_start_swarm(argparse.Namespace(swarm="backend-fix", json=True))
         self.assertIn("top-level swarms", str(cm.exception))
+
+    def test_managed_launch_command_includes_wait_env_when_configured(self):
+        with mock.patch.object(broccoli_comms_app, "broccoli_comms_launcher_argv", return_value=["broccoli-comms"]), \
+             mock.patch.object(broccoli_comms_app, "managed_track_env_assignments", return_value=[]), \
+             mock.patch.object(broccoli_comms_app, "wrapper_path", return_value="/usr/bin/agent-wrapper"):
+            command = broccoli_comms_app.managed_agent_launch_command(
+                "planner",
+                "/work tree",
+                "pi --flag",
+                wait=True,
+            )
+
+        self.assertIn("/usr/bin/agent-wrapper", command)
+        self.assertIn("BROCCOLI_COMMS_WAIT=1", command)
+
+    def test_run_with_wait_flag_passes_wait_to_managed_launch(self):
+        calls = []
+        def fake_tmux(*cmd, **kwargs):
+            calls.append(list(cmd))
+            if cmd and cmd[0] == "new-window":
+                return mock.Mock(returncode=0, stdout="%42\t%1", stderr="")
+        
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": tmp, "XDG_CACHE_HOME": tmp, "XDG_RUNTIME_DIR": tmp, "BROCCOLI_COMMS_DISABLE_CONFIG_REGISTRIES": "1"}, clear=False), \
+             mock.patch.object(broccoli_comms_app, "ensure_tracker"), \
+             mock.patch.object(broccoli_comms_app, "ensure_tmux"), \
+             mock.patch.object(broccoli_comms_app, "window_exists", return_value=False), \
+             mock.patch.object(broccoli_comms_app, "tmux", side_effect=fake_tmux), \
+             mock.patch("sys.stdout", io.StringIO()):
+            
+            broccoli_comms_app.run(argparse.Namespace(
+                name="planner",
+                cwd=tmp,
+                scope=None,
+                host=None,
+                timeout=30.0,
+                swarm=None,
+                role=None,
+                json=True,
+                default_agent_command=None,
+                wait=True,
+                command=["pi"],
+            ))
+
+        # Check if BROCCOLI_COMMS_WAIT=1 was passed in the tmux window execution command
+        new_window_call = [c for c in calls if c[0] == "new-window"][0]
+        launch_cmd = new_window_call[-1]
+        self.assertIn("BROCCOLI_COMMS_WAIT=1", launch_cmd)
+
+    def test_run_remote_forwards_wait_flag(self):
+        def fake_rpc(method, params=None, **_kwargs):
+            if method == "list_trackers":
+                return [{"hostname": "remote-host", "tracker_id": "tracker-remote"}]
+            if method == "tracker_info":
+                return {"tracker_id": "tracker-local"}
+            if method == "publish_tracker_event":
+                fake_rpc.publish = params
+                return {"success": True}
+            if method == "wait_events":
+                return {"events": [{"type": "remote_run_result", "request_id": "remote-run-fixed1234567", "ok": True}], "last_seq": 1}
+        fake_rpc.publish = None
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(broccoli_comms_app, "ensure_tracker"), \
+                 mock.patch.object(broccoli_comms_app.uuid, "uuid4", return_value=mock.Mock(hex="fixed1234567890")), \
+                 mock.patch.object(broccoli_comms_app, "tracker_rpc", side_effect=fake_rpc):
+                broccoli_comms_app.run(argparse.Namespace(
+                    name="planner",
+                    host="remote-host",
+                    timeout=1,
+                    cwd=tmp,
+                    scope="project:x",
+                    swarm=None,
+                    role=None,
+                    wait=True,
+                    command=["pi", "--fast"],
+                ))
+
+        payload = fake_rpc.publish["payload"]
+        self.assertEqual(payload["wait"], True)
 
 
 if __name__ == "__main__":

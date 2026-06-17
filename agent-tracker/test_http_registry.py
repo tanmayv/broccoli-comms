@@ -1059,6 +1059,27 @@ class TestHttpAndRegistry(unittest.TestCase):
         self.assertEqual(publish.call_args.args[1], "remote_run_result")
         self.assertTrue(publish.call_args.args[2]["ok"])
 
+    def test_handle_remote_run_request_supports_wait(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            proc = mock.Mock(returncode=0, stdout=json.dumps({"started": "coder"}), stderr="")
+            with mock.patch.dict(os.environ, {"BROCCOLI_COMMS_CLI": ""}, clear=False), \
+                 mock.patch.object(registry_client.subprocess, "run", return_value=proc) as run, \
+                 mock.patch.object(registry_client, "publish_tracker_event", return_value=202) as publish, \
+                 mock.patch.object(registry_client, "remote_run_enabled", return_value=True):
+                registry_client._handle_remote_run_request({
+                    "request_id": "rr-2",
+                    "agent": "coder",
+                    "cwd": tmp,
+                    "scope": "project:remote-run-request",
+                    "command": ["pi", "--fast"],
+                    "source_tracker_id": "tracker-a",
+                    "wait": True,
+                })
+
+        argv = run.call_args.args[0]
+        self.assertEqual(argv[:4], ["broccoli-comms", "run", "coder", "--json"])
+        self.assertIn("--wait", argv)
+
     def test_remote_run_request_omitted_cwd_command_uses_broccoli_saved_config_semantics(self):
         proc = mock.Mock(returncode=0, stdout=json.dumps({"started": "coder"}), stderr="")
         with mock.patch.dict(os.environ, {"BROCCOLI_COMMS_CLI": ""}, clear=False), \

@@ -320,4 +320,13 @@ while true; do
   break
 done
 
+if [[ "${BROCCOLI_COMMS_WAIT:-}" == "1" ]]; then
+  echo "" >&2
+  echo "====================================================" >&2
+  echo "Agent process exited with status $run_status." >&2
+  echo "Press Enter to close, or wait 30 seconds..." >&2
+  echo "====================================================" >&2
+  read -t 30 -r || true
+fi
+
 exit "$run_status"
