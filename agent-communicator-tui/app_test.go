@@ -585,11 +585,8 @@ func TestEventsLoadedErrorSchedulesDelayedRetry(t *testing.T) {
 func TestRetryEventsStartsWaitEvents(t *testing.T) {
 	m := model{eventSeq: 3, local: &fakeLocal{events: tracker.WaitEventsResult{LastSeq: 4}}}
 	_, cmd := m.Update(retryEvents{})
-	if cmd == nil {
-		t.Fatal("retryEvents should start waitEvents")
-	}
-	if msg, ok := cmd().(eventsLoaded); !ok || msg.Result.LastSeq != 4 {
-		t.Fatalf("retry command msg = %#v", msg)
+	if cmd != nil {
+		t.Fatal("retryEvents should not start waitEvents (disabled)")
 	}
 }
 

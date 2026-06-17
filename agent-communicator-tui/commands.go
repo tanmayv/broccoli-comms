@@ -610,15 +610,7 @@ func messageBodyForDelivery(body string) string {
 }
 
 func waitEvents(local localClient, since int64) tea.Cmd {
-	return func() tea.Msg {
-		if local == nil {
-			return eventsLoaded{}
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
-		defer cancel()
-		result, err := local.WaitEvents(ctx, tracker.WaitOptions{Since: since, Timeout: 25 * time.Second})
-		return eventsLoaded{Result: result, Err: err}
-	}
+	return nil
 }
 
 func shouldReloadForEvents(ownName string, row agentRow, result tracker.WaitEventsResult) bool {
