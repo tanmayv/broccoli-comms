@@ -155,7 +155,7 @@ func validMemoryType(value string) bool {
 
 func submitMemoryFormCmd(local localClient, form memoryFormState) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 
 		params := map[string]any{

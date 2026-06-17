@@ -117,7 +117,7 @@ func editableTaskFieldValue(task taskRecord, field string) (string, bool) {
 }
 
 func updateTaskField(taskID, field, value string) taskEditClosed {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	args := []string{"task", "update", taskID, "--json"}
 	switch field {

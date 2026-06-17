@@ -87,7 +87,7 @@ func approvalReviewCmd(msg tracker.Message, result string) tea.Cmd {
 		if msg.ApprovalID == "" {
 			return approvalReviewResult{ApprovalID: msg.ApprovalID, Result: result, Err: errors.New("approval id is required")}
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		shown, err := loadApprovalForMessage(ctx, msg)
 		if err != nil {

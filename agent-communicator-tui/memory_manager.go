@@ -23,7 +23,7 @@ type memoryEditClosed struct {
 
 func loadMemoryApprovalsCmd(local localClient) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 
 		pending, err := local.MemoryList(ctx, map[string]any{"status": "pending"})
@@ -44,7 +44,7 @@ func loadMemoryApprovalsCmd(local localClient) tea.Cmd {
 
 func memoryManagerActionCmd(local localClient, mem memoryRecord, action string) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		if mem.MemoryID == "" {
 			return memoryActionResult{Action: action, Err: fmt.Errorf("memory id is required")}
@@ -111,7 +111,7 @@ func editMemoryInEditor(local localClient, mem memoryRecord) tea.Cmd {
 			}
 			title := strings.TrimSpace(parts[0])
 			body := strings.TrimSpace(parts[1])
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
 
 			params := map[string]any{

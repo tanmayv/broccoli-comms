@@ -47,7 +47,7 @@ func (m model) confirmOrRunChainAssign() (model, tea.Cmd) {
 
 func createTaskInChainCmd(title, agent, priority string, dependsOn []string) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		args := []string{"task", "create", "--title", title, "--priority", firstNonEmpty(priority, "P1"), "--json"}
 		if agent != "" {
@@ -66,7 +66,7 @@ func createTaskInChainCmd(title, agent, priority string, dependsOn []string) tea
 
 func summarizeTaskChainCmd(chainID string) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		if chainID == "" {
 			return taskActionResult{Action: "summary", Err: fmt.Errorf("no active chain to summarize")}
@@ -81,7 +81,7 @@ func summarizeTaskChainCmd(chainID string) tea.Cmd {
 
 func archiveTaskChainCmd(tasks []taskRecord) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		for _, task := range tasks {
 			if task.TaskID == "" || taskCompleted(task) {
@@ -98,7 +98,7 @@ func archiveTaskChainCmd(tasks []taskRecord) tea.Cmd {
 
 func assignTaskChainCmd(tasks []taskRecord, agent string) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		if agent == "" {
 			return taskActionResult{Action: "assign_chain", Err: fmt.Errorf("no selected agent to assign chain")}

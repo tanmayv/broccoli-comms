@@ -206,7 +206,7 @@ func saveTargetID(row agentRow) string {
 
 func saveLocalAgentCmd(agentName, command, description, cwd string) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 
 		args := []string{"save", "-a", agentName, "-w", cwd, "-c", command}
@@ -227,7 +227,7 @@ func saveLocalAgentCmd(agentName, command, description, cwd string) tea.Cmd {
 
 func publishRemoteSaveRequestCmd(local localClient, row agentRow, agentName, command, description, cwd string) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 
 		payload := map[string]any{"agent_to_save": saveTargetID(row)}

@@ -89,7 +89,7 @@ func taskParticipantActionCmd(task taskRecord, role, agent string) tea.Cmd {
 		if agent == "" {
 			return taskActionResult{TaskID: task.TaskID, Action: "participant_" + role, Err: fmt.Errorf("no selected agent to add as %s", role)}
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		args := []string{"task", "participant", "add", task.TaskID, "--agent", agent, "--role", role, "--json"}
 		out, err := runApprovalCLI(ctx, args...)
@@ -105,7 +105,7 @@ func taskParticipantDeactivateCmd(task taskRecord, participant taskParticipant) 
 		if participant.ParticipantID == "" {
 			return taskActionResult{TaskID: task.TaskID, Action: "participant_deactivate", Err: fmt.Errorf("participant id is required")}
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		args := []string{"task", "participant", "update", participant.ParticipantID, "--status", "inactive", "--json"}
 		out, err := runApprovalCLI(ctx, args...)
@@ -124,7 +124,7 @@ func taskParticipantChangeRoleCmd(task taskRecord, participant taskParticipant, 
 		if agent == "" {
 			return taskActionResult{TaskID: task.TaskID, Action: "participant_change_role", Err: fmt.Errorf("no selected agent to change role")}
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		deactivate := []string{"task", "participant", "update", participant.ParticipantID, "--status", "inactive", "--json"}
 		out, err := runApprovalCLI(ctx, deactivate...)
@@ -142,7 +142,7 @@ func taskParticipantChangeRoleCmd(task taskRecord, participant taskParticipant, 
 
 func taskActionCmd(task taskRecord, action, agent string) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		args := []string{"task", "update", task.TaskID, "--json"}
 		switch action {

@@ -82,7 +82,7 @@ func memoryActionCmd(local localClient, msg tracker.Message, action string, titl
 		if msg.MemoryID == "" {
 			return memoryActionResult{MemoryID: msg.MemoryID, Action: action, Err: errors.New("memory id is required")}
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		shown, err := loadMemoryForMessage(ctx, local, msg)
 		if err != nil {

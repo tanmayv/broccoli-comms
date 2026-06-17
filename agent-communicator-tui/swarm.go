@@ -25,7 +25,7 @@ func loadSwarms(local localClient) tea.Cmd {
 		if local == nil {
 			return swarmsLoaded{}
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		result, err := local.ListSwarms(ctx)
 		return swarmsLoaded{Rows: swarmRowsFromTracker(result.Swarms), Err: err}
@@ -37,7 +37,7 @@ func loadSelectedSwarmTimeline(local localClient, swarmName string) tea.Cmd {
 		if local == nil || strings.TrimSpace(swarmName) == "" {
 			return swarmTimelineLoaded{Swarm: swarmName}
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		result, err := local.GetSwarmTimeline(ctx, swarmName, advancedInboxFetchLimit)
 		return swarmTimelineLoaded{Swarm: swarmName, Messages: result.Messages, Err: err}

@@ -20,7 +20,7 @@ func loadTasksTab(model) tea.Cmd { return loadTasksCmd() }
 
 func loadTasksCmd() tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		tasks, err := loadTaskRecords(ctx)
 		if err != nil {
