@@ -1,4 +1,46 @@
-{ config, pkgs, lib, inputs, setup, ... }: {
+{ config, pkgs, lib, inputs, setup, ... }:
+let
+  stop-trackers = pkgs.writeShellScriptBin "stop-trackers" ''
+    echo "Searching for running agent-tracker processes..."
+    
+    # Get PIDs of processes matching "agent-tracker", excluding our own PID
+    pids=$(pgrep -f "agent-tracker" | grep -v "$$" || true)
+    # Clean up whitespace/newlines
+    pids=$(echo "$pids" | xargs || true)
+
+    if [ -z "$pids" ]; then
+        echo "No running agent-tracker processes found."
+        exit 0
+    fi
+
+    # Convert to comma-separated for ps
+    pids_comma=$(echo "$pids" | tr ' ' ',')
+
+    echo "Found the following agent-tracker processes:"
+    ps -p "$pids_comma" -o pid,args 2>/dev/null || ps -p "$pids_comma" -o pid,command || echo "$pids"
+    echo
+
+    echo "Stopping processes..."
+    for pid in $pids; do
+        echo "Stopping PID $pid..."
+        kill -15 "$pid" 2>/dev/null || true
+    done
+
+    # Wait a moment for graceful shutdown
+    sleep 1
+
+    # Force kill any that are still running
+    for pid in $pids; do
+        if kill -0 "$pid" 2>/dev/null; then
+            echo "PID $pid still running, sending SIGKILL..."
+            kill -9 "$pid" 2>/dev/null || true
+        fi
+    done
+
+    echo "Done. All matching agent-tracker processes stopped."
+  '';
+in
+{
   # Home Manager needs a bit of information about you and the
   # paths it should manage.
   # IMPORTANT: Update setup.nix with your actual username and home directory if not using impure mode!
@@ -22,6 +64,9 @@
     git
     curl
     jq
+    
+    # Utility to stop all running agent trackers
+    stop-trackers
 
     # The Pi coding agent binary from pi.nix flake
     inputs.pi-nix.packages.${pkgs.system}.default
