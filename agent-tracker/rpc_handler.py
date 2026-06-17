@@ -1226,6 +1226,7 @@ dispatcher = {
 
 def handle_client(conn: socket.socket) -> None:
     """Handles a single client connection, reading JSON-RPC request and sending response."""
+    logging.info("handle_client: accepted connection")
     try:
         conn.settimeout(2.0)
         
@@ -1235,23 +1236,31 @@ def handle_client(conn: socket.socket) -> None:
             # SO_PEERCRED returns (pid, uid, gid) as 3 integers
             creds = conn.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize('3i'))
             caller_pid, _, _ = struct.unpack('3i', creds)
+            logging.info("handle_client: peer credentials pid=%s", caller_pid)
         except Exception as e:
             logging.debug(f"Failed to get SO_PEERCRED: {e}")
+            logging.info("handle_client: peer credentials SO_PEERCRED not available")
 
         data = b""
+        logging.info("handle_client: entering read loop")
         while True:
             chunk = conn.recv(BUFFER_SIZE)
             if not chunk:
+                logging.info("handle_client: read loop EOF detected")
                 break
+            logging.info("handle_client: read chunk len=%d", len(chunk))
             data += chunk
             
+        logging.info("handle_client: read loop finished, total bytes read=%d", len(data))
         if not data:
+            logging.info("handle_client: no data read, returning")
             return
             
         try:
             req = json.loads(data.decode())
             logging.info("JSON-RPC Request: %s", _sanitize_request_for_logging(req))
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            logging.error("handle_client: JSON decode error: %s", e)
             return
             
         method = req.get("method")
@@ -1263,6 +1272,7 @@ def handle_client(conn: socket.socket) -> None:
         
         handler = dispatcher.get(method)
         if handler:
+            logging.info("handle_client: dispatching method=%s, req_id=%s, caller_pid=%s", method, req_id, caller_pid)
             try:
                 # Pass caller_pid to handlers that might need it
                 if method in ["get_inbox", "update_agent", "heartbeat", "send_message", "send_input", "wait_events", "whoami", "list", "rename", "unregister", "spin_agent", "capture_pane",
@@ -1271,17 +1281,24 @@ def handle_client(conn: socket.socket) -> None:
                     result = handler(params, caller_pid=caller_pid)
                 else:
                     result = handler(params)
+                logging.info("handle_client: method=%s success", method)
             except CursorExpiredError as e:
                 error = {"code": -32001, "message": "cursor_expired"}
+                logging.warning("handle_client: method=%s cursor expired error: %s", method, e)
             except RPCStructuredError as e:
                 error = {"code": e.code, "message": str(e), "data": e.data}
+                logging.warning("handle_client: method=%s RPC structured error: %s", method, e)
             except ValueError as e:
                 error = {"code": -32602, "message": str(e)}
+                logging.warning("handle_client: method=%s value error: %s", method, e)
             except RuntimeError as e:
                 error = {"code": -32603, "message": str(e)}
+                logging.error("handle_client: method=%s runtime error: %s", method, e)
             except Exception as e:
                 error = {"code": -32603, "message": f"Internal error: {e}"}
+                logging.error("handle_client: method=%s unexpected error: %s", method, e)
         else:
+            logging.warning("handle_client: method=%s not found", method)
             error = {"code": -32601, "message": "Method not found"}
             
         resp = {"jsonrpc": "2.0", "id": req_id}
@@ -1290,10 +1307,14 @@ def handle_client(conn: socket.socket) -> None:
         else:
             resp["result"] = result
             
-        conn.sendall(json.dumps(resp).encode())
+        resp_data = json.dumps(resp).encode()
+        logging.info("handle_client: sending response, len=%d", len(resp_data))
+        conn.sendall(resp_data)
+        logging.info("handle_client: response sent successfully")
     except (socket.error, socket.timeout) as e:
         logging.error(f"Socket error handling client: {e}")
     except Exception as e:
         logging.error(f"Unexpected error handling client: {e}")
     finally:
+        logging.info("handle_client: closing connection socket")
         conn.close()

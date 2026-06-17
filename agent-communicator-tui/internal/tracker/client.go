@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -109,8 +110,37 @@ func New(socketPath string) *Client {
 	return &Client{SocketPath: socketPath}
 }
 
+var logMutex sync.Mutex
+
+func debugLog(format string, args ...interface{}) {
+	logMutex.Lock()
+	defer logMutex.Unlock()
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	logDir := filepath.Join(home, ".cache", "broccoli-comms")
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return
+	}
+	logPath := filepath.Join(logDir, "tui-debug.log")
+
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	timestamp := time.Now().Format("2006-01-02 15:04:05.000000")
+	msg := fmt.Sprintf(format, args...)
+	_, _ = fmt.Fprintf(f, "[%s] %s\n", timestamp, msg)
+}
+
 func (c *Client) call(ctx context.Context, method string, params any, timeout time.Duration, out any) error {
+	debugLog("Client.call start: method=%s", method)
 	if c.SocketPath == "" {
+		debugLog("Client.call error: socket path is empty")
 		return errors.New("tracker socket path is empty")
 	}
 	dial := c.Dial
@@ -118,11 +148,17 @@ func (c *Client) call(ctx context.Context, method string, params any, timeout ti
 		d := net.Dialer{}
 		dial = d.DialContext
 	}
+	debugLog("Client.call: dialing unix socket %s", c.SocketPath)
 	conn, err := dial(ctx, "unix", c.SocketPath)
 	if err != nil {
+		debugLog("Client.call dial error: %v", err)
 		return err
 	}
-	defer conn.Close()
+	debugLog("Client.call dial success: local=%s, remote=%s", conn.LocalAddr(), conn.RemoteAddr())
+	defer func() {
+		debugLog("Client.call: closing connection")
+		conn.Close()
+	}()
 	deadline := time.Time{}
 	if timeout > 0 {
 		deadline = time.Now().Add(timeout)
@@ -131,35 +167,56 @@ func (c *Client) call(ctx context.Context, method string, params any, timeout ti
 		deadline = ctxDeadline
 	}
 	if !deadline.IsZero() {
+		debugLog("Client.call: setting connection deadline to %v", deadline)
 		_ = conn.SetDeadline(deadline)
 	}
 	stopCancelWatcher := make(chan struct{})
 	go func() {
 		select {
 		case <-ctx.Done():
+			debugLog("Client.call: context cancelled, forcing deadline now")
 			_ = conn.SetDeadline(time.Now())
 		case <-stopCancelWatcher:
 		}
 	}()
 	defer close(stopCancelWatcher)
-	if err := json.NewEncoder(conn).Encode(rpcRequest{JSONRPC: "2.0", Method: method, Params: params, ID: 1}); err != nil {
+
+	reqPayload := rpcRequest{JSONRPC: "2.0", Method: method, Params: params, ID: 1}
+	reqBytes, err := json.Marshal(reqPayload)
+	if err == nil {
+		debugLog("Client.call: writing request bytes (len=%d)", len(reqBytes))
+	}
+
+	if err := json.NewEncoder(conn).Encode(reqPayload); err != nil {
+		debugLog("Client.call encode/write error: %v", err)
 		return err
 	}
+
 	if unix, ok := conn.(*net.UnixConn); ok {
-		_ = unix.CloseWrite()
+		debugLog("Client.call: calling CloseWrite()")
+		err := unix.CloseWrite()
+		debugLog("Client.call: CloseWrite() done, err=%v", err)
 	}
+
+	debugLog("Client.call: entering io.ReadAll()")
 	respBytes, err := io.ReadAll(bufio.NewReader(conn))
 	if err != nil {
+		debugLog("Client.call read error: %v", err)
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		return err
 	}
+	debugLog("Client.call: bytes read (len=%d)", len(respBytes))
+
+	debugLog("Client.call: unmarshaling JSON response")
 	var resp rpcResponse
 	if err := json.Unmarshal(respBytes, &resp); err != nil {
+		debugLog("Client.call unmarshal error: %v", err)
 		return err
 	}
 	if resp.Error != nil {
+		debugLog("Client.call RPC error returned: code=%d, message=%s", resp.Error.Code, resp.Error.Message)
 		rpcErr := &RPCError{Method: method, Code: resp.Error.Code, Message: resp.Error.Message}
 		if len(resp.Error.Data) > 0 {
 			var data RPCErrorData
@@ -170,9 +227,16 @@ func (c *Client) call(ctx context.Context, method string, params any, timeout ti
 		return rpcErr
 	}
 	if out == nil {
+		debugLog("Client.call success (nil output)")
 		return nil
 	}
-	return json.Unmarshal(resp.Result, out)
+	err = json.Unmarshal(resp.Result, out)
+	if err != nil {
+		debugLog("Client.call unmarshal result error: %v", err)
+	} else {
+		debugLog("Client.call success")
+	}
+	return err
 }
 
 func (c *Client) EnsureMailbox(ctx context.Context, agentName string) (EnsureMailboxResult, error) {
