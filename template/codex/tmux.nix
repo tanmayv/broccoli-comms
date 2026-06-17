@@ -186,6 +186,38 @@ in {
       # Reload config shortcut
       bind r source-file ~/.config/tmux/tmux.conf \; display-message "Config reloaded!"
 
+      # Smart pane switching with awareness of Vim splits (ported from home-manager-core)
+      is_vim="ps -o state= -o comm= -t '#{pane_tty}' \
+          | grep -iqE '^[^TXZ ]+ +(\\S+\\/)?g?(view|l?n?vim?x?|fzf|hx|lazygit)(diff)?$'"
+      bind-key -n 'C-h' if-shell "$is_vim" 'send-keys C-h'  'select-pane -L'
+      bind-key -n 'C-j' if-shell "$is_vim" 'send-keys C-j'  'select-pane -D'
+      bind-key -n 'C-k' if-shell "$is_vim" 'send-keys C-k'  'select-pane -U'
+      bind-key -n 'C-l' if-shell "$is_vim" 'send-keys C-l'  'select-pane -R'
+
+      bind-key -T copy-mode-vi 'C-h' select-pane -L
+      bind-key -T copy-mode-vi 'C-j' select-pane -D
+      bind-key -T copy-mode-vi 'C-k' select-pane -U
+      bind-key -T copy-mode-vi 'C-l' select-pane -R
+
+      # Explicit Copy-on-Select and Clipboard Integration
+      # Use pbcopy on macOS
+      if-shell "uname | grep -q Darwin" {
+          bind-key -T copy-mode-vi y send-keys -X copy-pipe-and-cancel "pbcopy"
+          bind-key -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel "pbcopy"
+      }
+
+      # Use xclip or wl-copy on Linux
+      if-shell "uname | grep -q Linux" {
+          if-shell "command -v xclip >/dev/null 2>&1" {
+              bind-key -T copy-mode-vi y send-keys -X copy-pipe-and-cancel "xclip -in -selection clipboard"
+              bind-key -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel "xclip -in -selection clipboard"
+          }
+          if-shell "command -v wl-copy >/dev/null 2>&1" {
+              bind-key -T copy-mode-vi y send-keys -X copy-pipe-and-cancel "wl-copy"
+              bind-key -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel "wl-copy"
+          }
+      }
+
       # Pane border and title configuration
       set -g pane-border-status bottom
       set -g pane-border-format "#[bg=${palette.background},fg=${palette.color8}]─(#[bg=${palette.background},fg=${palette.color5}] #D #[bg=${palette.background},fg=${palette.color8}]| #[bg=${palette.background},fg=${palette.color4}]#{?@agent_name,#{@agent_name},no-name} #[bg=${palette.background},fg=${palette.color8}]| #[bg=${palette.background},fg=${palette.color2}]#T #[bg=${palette.background},fg=${palette.color8}])─"
