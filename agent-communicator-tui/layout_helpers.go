@@ -28,9 +28,9 @@ func responsiveInputPadding(terminalWidth int) int {
 }
 
 func contentDetailLayoutWidths(width int) (int, int) {
-	right := min(42, max(28, (width*32)/100))
+	right := min(42, max(28, (width*35)/100))
 	if width < 100 {
-		right = min(34, max(24, width/3))
+		right = min(34, max(24, (width*35)/100))
 	}
 	return max(10, width-right), right
 }

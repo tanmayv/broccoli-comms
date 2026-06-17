@@ -203,16 +203,28 @@ func TestWideComposerSitsBelowConversationHeader(t *testing.T) {
 }
 
 func TestLayoutWidthsConsumeAvailableWidth(t *testing.T) {
-	m := model{width: 160}
-	chat, right, extra := m.layoutWidths()
-	if extra != 0 {
-		t.Fatalf("extra panel = %d, want 0 for two-column layout", extra)
+	tests := []struct {
+		width     int
+		wantChat  int
+		wantRight int
+	}{
+		{width: 160, wantChat: 118, wantRight: 42}, // Clamped at max 42
+		{width: 100, wantChat: 65, wantRight: 35},   // 35% of 100 = 35
+		{width: 80, wantChat: 52, wantRight: 28},    // 35% of 80 = 28 (narrow layout, clamped between 24 and 34)
 	}
-	if got := chat + right; got != m.width {
-		t.Fatalf("two-column width = %d, want %d", got, m.width)
-	}
-	if right != 42 || chat != 118 {
-		t.Fatalf("chat/right = %d/%d, want 118/42", chat, right)
+
+	for _, tt := range tests {
+		m := model{width: tt.width}
+		chat, right, extra := m.layoutWidths()
+		if extra != 0 {
+			t.Errorf("width %d: extra panel = %d, want 0 for two-column layout", tt.width, extra)
+		}
+		if got := chat + right; got != m.width {
+			t.Errorf("width %d: two-column width = %d, want %d", tt.width, got, m.width)
+		}
+		if right != tt.wantRight || chat != tt.wantChat {
+			t.Errorf("width %d: chat/right = %d/%d, want %d/%d", tt.width, chat, right, tt.wantChat, tt.wantRight)
+		}
 	}
 }
 
@@ -234,7 +246,7 @@ func maxRenderedLineWidth(s string) int {
 func TestHomeTabWelcomeScreenRendersASCIIAndShortcuts(t *testing.T) {
 	m := model{width: 80, height: 80, mode: homeView}
 	view := stripANSI(m.homePanel(80, 80))
-	for _, want := range []string{"____", "Welcome to Broccoli Comms TUI", "Ctrl-t", "Direct Tab Navigation", "AGENTS", "Working with Durable Memory"} {
+	for _, want := range []string{"____", "Welcome to Broccoli Comms TUI", "Ctrl-t", "Direct Tab Navigation", "AGENTS", "Working with Durable Memory", "C-o (Ctrl+o)", "Run agent"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("Home tab rendering missing %q:\n%s", want, view)
 		}
@@ -244,7 +256,7 @@ func TestHomeTabWelcomeScreenRendersASCIIAndShortcuts(t *testing.T) {
 func TestChangelogTabRendersReleaseNotes(t *testing.T) {
 	m := model{width: 80, height: 80, mode: changelogView}
 	view := stripANSI(m.changelogPanel(80, 80))
-	for _, want := range []string{"Changelog", "v0.1.4", "v0.1.3", "TUI [Home] Tab", "v0.1.2"} {
+	for _, want := range []string{"Changelog", "v0.1.5", "v0.1.4", "v0.1.3", "TUI [Home] Tab", "v0.1.2"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("Changelog tab rendering missing %q:\n%s", want, view)
 		}

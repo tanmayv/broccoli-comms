@@ -4,19 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/tanmayvijay/home-manager-core/agent-communicator-tui/internal/tracker"
 )
-
-func TestCtrlTTogglesSwarmViewAndLoadsSwarms(t *testing.T) {
-	local := &fakeLocal{swarms: []tracker.Swarm{{Name: "backend-fix"}}}
-	m := model{ownName: "agent-communicator", rows: []agentRow{{Name: "alpha", Scope: "local"}}, local: local}
-	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
-	m = updated.(model)
-	if m.mode != swarmView || cmd == nil {
-		t.Fatalf("mode=%v cmd=%v", m.mode, cmd)
-	}
-}
 
 func TestAdvancedComposerShowsMessageModeInline(t *testing.T) {
 	m := model{mode: advancedView, rows: []agentRow{{Name: "alpha"}}}

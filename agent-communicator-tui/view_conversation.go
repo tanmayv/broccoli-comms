@@ -50,9 +50,6 @@ func (m model) messageViewportPanel(width, visible int) ViewportPanel {
 func (m model) messageLinesForWidth(width int) []string {
 	start := time.Now()
 	wrapWidth := max(10, width)
-	if m.mode == swarmView {
-		return m.swarmLines(wrapWidth)
-	}
 	messages := m.displayOrderedMessages()
 	defer func() {
 		debugLogf("message_lines duration=%s messages=%d width=%d", time.Since(start), len(messages), width)

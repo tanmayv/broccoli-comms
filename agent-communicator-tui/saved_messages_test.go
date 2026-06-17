@@ -63,7 +63,6 @@ func TestSavedViewRowsAndMessages(t *testing.T) {
 func TestCtrlTCyclesToSavedView(t *testing.T) {
 	m := model{}
 	m.toggleMode()
-	m.toggleMode()
 	if m.mode != savedView {
 		t.Fatalf("mode=%v", m.mode)
 	}

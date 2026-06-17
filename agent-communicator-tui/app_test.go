@@ -1151,11 +1151,11 @@ func TestAltShortcutsSwitchTabs(t *testing.T) {
 		t.Fatalf("Alt-2 failed to switch to simpleView, got: %v", m.mode)
 	}
 
-	// 2. Press Alt-6 (should switch to tasksView)
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("6"), Alt: true})
+	// 2. Press Alt-5 (should switch to tasksView)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("5"), Alt: true})
 	m = updated.(model)
 	if m.mode != tasksView {
-		t.Fatalf("Alt-6 failed to switch to tasksView, got: %v", m.mode)
+		t.Fatalf("Alt-5 failed to switch to tasksView, got: %v", m.mode)
 	}
 
 	// 3. Press Alt-h (should switch to homeView)

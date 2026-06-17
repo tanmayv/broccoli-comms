@@ -315,9 +315,6 @@ func isSentMessage(msg tracker.Message) bool {
 }
 
 func shouldRenderIncomingBubbleBackground(mode viewMode, msg tracker.Message) bool {
-	if mode == swarmView {
-		return true
-	}
 	return !isSentMessage(msg)
 }
 

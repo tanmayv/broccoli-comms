@@ -81,11 +81,7 @@ func (m model) mainContentView(bodyH int) string {
 }
 
 func (m model) layoutWidths() (int, int, int) {
-	right := min(42, max(28, (m.width*32)/100))
-	if m.width < 100 {
-		right = min(34, max(24, m.width/3))
-	}
-	chat := max(10, m.width-right)
+	chat, right := contentDetailLayoutWidths(m.width)
 	return chat, right, 0
 }
 
@@ -599,11 +595,10 @@ func (m model) homePanel(width, height int) string {
 	b.WriteString(subStyle.Render("Direct Tab Navigation (Alt Shortcuts):") + "\n")
 	b.WriteString("  " + boldStyle.Render("Alt-1") + " or " + boldStyle.Render("Alt-h") + " : Go to " + boldStyle.Render("[Home]") + " (this user guide)\n")
 	b.WriteString("  " + boldStyle.Render("Alt-2") + " or " + boldStyle.Render("Alt-c") + " : Go to " + boldStyle.Render("[Chat]") + " (Simple Chat & composer)\n")
-	b.WriteString("  " + boldStyle.Render("Alt-3") + " or " + boldStyle.Render("Alt-w") + " : Go to " + boldStyle.Render("[Swarm]") + " (Coordinate agent groups)\n")
-	b.WriteString("  " + boldStyle.Render("Alt-4") + " or " + boldStyle.Render("Alt-s") + " : Go to " + boldStyle.Render("[Saved]") + " (Starred messages list)\n")
-	b.WriteString("  " + boldStyle.Render("Alt-5") + " or " + boldStyle.Render("Alt-m") + " : Go to " + boldStyle.Render("[Memory]") + " (Memory Management & audits)\n")
-	b.WriteString("  " + boldStyle.Render("Alt-6") + " or " + boldStyle.Render("Alt-t") + " : Go to " + boldStyle.Render("[Tasks]") + " (Manage task chains)\n")
-	b.WriteString("  " + boldStyle.Render("Alt-7") + " or " + boldStyle.Render("Alt-l") + " : Go to " + boldStyle.Render("[Changelog]") + " (Release notes)\n")
+	b.WriteString("  " + boldStyle.Render("Alt-3") + " or " + boldStyle.Render("Alt-s") + " : Go to " + boldStyle.Render("[Saved]") + " (Starred messages list)\n")
+	b.WriteString("  " + boldStyle.Render("Alt-4") + " or " + boldStyle.Render("Alt-m") + " : Go to " + boldStyle.Render("[Memory]") + " (Memory Management & audits)\n")
+	b.WriteString("  " + boldStyle.Render("Alt-5") + " or " + boldStyle.Render("Alt-t") + " : Go to " + boldStyle.Render("[Tasks]") + " (Manage task chains)\n")
+	b.WriteString("  " + boldStyle.Render("Alt-6") + " or " + boldStyle.Render("Alt-l") + " : Go to " + boldStyle.Render("[Changelog]") + " (Release notes)\n")
 	b.WriteString("  " + boldStyle.Render("Ctrl-t") + " / " + boldStyle.Render("Ctrl-y") + " : Cycle to Next / Previous Tab\n\n")
 
 	// Section 3: Core Navigation & Scrolling Shortcuts
@@ -617,7 +612,9 @@ func (m model) homePanel(width, height int) string {
 	b.WriteString("  - Highlight a remote agent in the sidebar and press " + boldStyle.Render("Enter") + " to open the launch form.\n")
 	b.WriteString("  - Configure the agent's CWD, provider model, CLI args, and click \"Run Agent\".\n")
 	b.WriteString("  - To stop or restart an active agent cooperatively, type " + boldStyle.Render("/restart") + " in the chat.\n")
-	b.WriteString("  - Open the agent actions menu by pressing " + boldStyle.Render("Enter") + " on an active agent card or via " + boldStyle.Render("Ctrl-k") + ".\n\n")
+	b.WriteString("  - Open the agent actions menu by pressing " + boldStyle.Render("Enter") + " on an active agent card or via " + boldStyle.Render("Ctrl-k") + ".\n")
+	b.WriteString("  " + lipgloss.NewStyle().Foreground(colors.Warning).Bold(true).Render("💡 NOTE:") + " You need to press " + boldStyle.Render("C-o (Ctrl+o)") + " to open the Command Palette, and\n")
+	b.WriteString("           select " + boldStyle.Render("\"Run agent\"") + " to open the 'run agent' menu first.\n\n")
 
 	// Section 5: Durable Memory Management
 	b.WriteString(subStyle.Render("Working with Durable Memory:") + "\n")
@@ -657,21 +654,25 @@ func (m model) homePanel(width, height int) string {
 	endLine := min(totalLines, m.messageOffset+contentH)
 	visibleLines := bodyLines[m.messageOffset:endLine]
 
+	bgStyle := lipgloss.NewStyle().Background(colors.BaseBg)
 	var paddedLines []string
 	for _, line := range visibleLines {
-		paddedLines = append(paddedLines, padStyledLine(line, innerW, colors.BaseBg))
+		padded := padStyledLine(line, innerW, colors.BaseBg)
+		paddedLines = append(paddedLines, bgStyle.Render(padded))
 	}
 
 	if showFooter {
 		footerText := fmt.Sprintf(" -- scroll with C-u/C-d or PgUp/PgDn (%d-%d/%d) --", m.messageOffset+1, endLine, totalLines)
 		footerRendered := mutedStyle.Italic(true).Render(footerText)
-		paddedLines = append(paddedLines, padStyledLine(footerRendered, innerW, colors.BaseBg))
+		padded := padStyledLine(footerRendered, innerW, colors.BaseBg)
+		paddedLines = append(paddedLines, bgStyle.Render(padded))
 	}
 
 	// Pad vertical height with empty styled lines to fill the viewport
 	targetBodyH := height - 1
 	for len(paddedLines) < targetBodyH {
-		paddedLines = append(paddedLines, padStyledLine("", innerW, colors.BaseBg))
+		padded := padStyledLine("", innerW, colors.BaseBg)
+		paddedLines = append(paddedLines, bgStyle.Render(padded))
 	}
 
 	renderedBody := strings.Join(paddedLines, "\n")
@@ -715,8 +716,20 @@ func (m model) changelogPanel(width, height int) string {
 	divider := lipgloss.NewStyle().Foreground(colors.Border).Render(strings.Repeat("━", innerW))
 	b.WriteString(divider + "\n\n")
 
+	// v0.1.5
+	b.WriteString(versionStyle.Render("v0.1.5 (Latest Release)") + "\n")
+	b.WriteString(taglineStyle.Render("Roomier sidebar layout, Swarms tab removal, onboarding updates, and styling fixes") + "\n\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Swarms Tab Removal") + ": Completely removed the Swarms tab, its group coordination timeline views, and all related Alt-3/Alt-w shortcuts to streamline the interface.\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Sidebar Width Increase") + ": Increased default TUI sidebar width to 35% across all remaining tabs (Home, Chat, Memory, Tasks) for enhanced readability.\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Launcher Callout") + ": Added an explicit Note callout instructing users to press C-o (Ctrl+o) to open the Command Palette and launch agents.\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Zero-Bleed Backgrounds") + ": Solved terminal background bleed bugs by explicitly styling every single viewport line in Home/Changelog tabs.\n")
+	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Version Upgrade") + ": Bumped project and Nix flake packages to version 0.1.5.\n\n")
+
+	// Divider between releases
+	b.WriteString(lipgloss.NewStyle().Foreground(colors.Border).Render(strings.Repeat("─", innerW)) + "\n\n")
+
 	// v0.1.4
-	b.WriteString(versionStyle.Render("v0.1.4 (Latest Release)") + "\n")
+	b.WriteString(versionStyle.Render("v0.1.4") + "\n")
 	b.WriteString(taglineStyle.Render("Direct Alt shortcuts, comprehensive onboarding guide, and UX polishing") + "\n\n")
 	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Direct Tab Shortcuts") + ": Switch tabs instantly using Alt+1..7 or Alt+h/c/w/s/m/t/l (works while composing).\n")
 	b.WriteString("  " + bulletStyle.Render("•") + " " + boldStyle.Render("Enhanced Home Tab") + ": Restructured into a complete user guide covering agent launching, memory, pane control, and shortcuts.\n")
@@ -772,21 +785,25 @@ func (m model) changelogPanel(width, height int) string {
 	endLine := min(totalLines, m.messageOffset+contentH)
 	visibleLines := bodyLines[m.messageOffset:endLine]
 
+	bgStyle := lipgloss.NewStyle().Background(colors.BaseBg)
 	var paddedLines []string
 	for _, line := range visibleLines {
-		paddedLines = append(paddedLines, padStyledLine(line, innerW, colors.BaseBg))
+		padded := padStyledLine(line, innerW, colors.BaseBg)
+		paddedLines = append(paddedLines, bgStyle.Render(padded))
 	}
 
 	if showFooter {
 		footerText := fmt.Sprintf(" -- scroll with C-u/C-d or PgUp/PgDn (%d-%d/%d) --", m.messageOffset+1, endLine, totalLines)
 		footerRendered := mutedStyle.Italic(true).Render(footerText)
-		paddedLines = append(paddedLines, padStyledLine(footerRendered, innerW, colors.BaseBg))
+		padded := padStyledLine(footerRendered, innerW, colors.BaseBg)
+		paddedLines = append(paddedLines, bgStyle.Render(padded))
 	}
 
 	// Pad vertical height with empty styled lines to fill the viewport
 	targetBodyH := height - 1
 	for len(paddedLines) < targetBodyH {
-		paddedLines = append(paddedLines, padStyledLine("", innerW, colors.BaseBg))
+		padded := padStyledLine("", innerW, colors.BaseBg)
+		paddedLines = append(paddedLines, bgStyle.Render(padded))
 	}
 
 	renderedBody := strings.Join(paddedLines, "\n")

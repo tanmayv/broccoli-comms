@@ -28,20 +28,6 @@ func TestAdvancedInboxLoadSelectsLatestAtTop(t *testing.T) {
 	}
 }
 
-func TestToggleToSwarmSelectsLatest(t *testing.T) {
-	local := &fakeLocal{swarms: []tracker.Swarm{{Name: "backend-fix"}}}
-	m := model{width: 80, height: 10, ownName: "agent-communicator", rows: []agentRow{{Name: "alpha", Scope: "local"}}, local: local}
-	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
-	m = updated.(model)
-	if cmd != nil {
-		updated, _ = m.Update(cmd())
-		m = updated.(model)
-	}
-	if m.mode != swarmView || m.messageSelected != 0 {
-		t.Fatalf("mode=%v selected=%d", m.mode, m.messageSelected)
-	}
-}
-
 func TestAgentSwitchReloadSelectsLatest(t *testing.T) {
 	local := &fakeLocal{inbox: []tracker.Message{{Sender: "beta", Body: "old"}, {Sender: "beta", Body: "new"}}}
 	m := model{width: 80, height: 10, selected: 0, rows: []agentRow{{Name: "alpha", Scope: "local"}, {Name: "beta", Scope: "local"}}, local: local}

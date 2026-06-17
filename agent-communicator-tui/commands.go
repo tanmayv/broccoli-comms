@@ -98,19 +98,7 @@ type allInboxLoaded struct {
 	Messages []tracker.Message
 	Err      error
 }
-type swarmsLoaded struct {
-	Rows []swarmRow
-	Err  error
-}
-type swarmTimelineLoaded struct {
-	Swarm    string
-	Messages []tracker.SwarmTimelineMessage
-	Err      error
-}
-type swarmAssigned struct {
-	Result tracker.AssignSwarmResult
-	Err    error
-}
+
 type unreadCountsLoaded struct {
 	Counts map[string]int
 	Err    error
@@ -448,31 +436,7 @@ func parseComposerAction(input string) composerAction {
 		}
 		return action
 	}
-	if trimmed == "/swarm" || trimmed == "/swarm create" {
-		return composerAction{Kind: "swarm_create", Original: input}
-	}
-	if strings.HasPrefix(trimmed, "/swarm create ") {
-		fields := strings.Fields(strings.TrimSpace(strings.TrimPrefix(trimmed, "/swarm create")))
-		action := composerAction{Kind: "swarm_create", Original: input}
-		if len(fields) > 0 {
-			action.SwarmName = fields[0]
-		}
-		for i := 1; i < len(fields); i++ {
-			switch fields[i] {
-			case "--main":
-				if i+1 < len(fields) {
-					action.MainAgent = fields[i+1]
-					i++
-				}
-			case "--subagent", "--sub":
-				if i+1 < len(fields) {
-					action.Subagents = append(action.Subagents, fields[i+1])
-					i++
-				}
-			}
-		}
-		return action
-	}
+
 	if trimmed == "/broadcast" {
 		return composerAction{Kind: "broadcast", Original: input}
 	}
@@ -533,17 +497,7 @@ func sendCurrentMessage(local localClient, senderName string, row agentRow, body
 	return sendOutboxRecord(local, senderName, row, makeOutboxRecord(senderName, row, body))
 }
 
-func assignSwarmCmd(local localClient, swarmName, main string, subagents []string) tea.Cmd {
-	return func() tea.Msg {
-		if local == nil {
-			return swarmAssigned{Err: errors.New("local tracker client unavailable")}
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
-		result, err := local.AssignSwarm(ctx, swarmName, main, subagents)
-		return swarmAssigned{Result: result, Err: err}
-	}
-}
+
 
 type restartRequested struct {
 	Target  string

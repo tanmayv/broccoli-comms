@@ -18,7 +18,6 @@ type viewMode int
 const (
 	simpleView viewMode = iota
 	advancedView
-	swarmView
 	savedView
 	memoryView
 	tasksView
@@ -46,10 +45,6 @@ type model struct {
 	outbox                  []outboxRecord
 	savedMessages           []savedMessageRecord
 	savedSelected           int
-	swarms                  []swarmRow
-	selectedSwarm           int
-	swarmMessages           []tracker.SwarmTimelineMessage
-	swarmErr                error
 	sentMessages            map[string][]tracker.Message
 	unreadRows              map[string]bool
 	unreadCounts            map[string]int
@@ -204,7 +199,6 @@ func initialLoadCmds(m model) tea.Cmd {
 		loadHiddenAgentsCmd(),
 		loadPromptsCmd(),
 		loadConfigItemsCmd(m.local),
-		loadSwarms(m.local),
 		loadUnreadCounts(m.local, m.ownName),
 		tickRefresh(),
 		tickCursorBlink(),
@@ -246,12 +240,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleInboxLoaded(msg)
 	case allInboxLoaded:
 		return m.handleAllInboxLoaded(msg)
-	case swarmsLoaded:
-		return m.handleSwarmsLoaded(msg)
-	case swarmTimelineLoaded:
-		return m.handleSwarmTimelineLoaded(msg)
-	case swarmAssigned:
-		return m.handleSwarmAssigned(msg)
 	case restartRequested:
 		return m.handleRestartRequested(msg)
 	case messageSent:
@@ -381,12 +369,6 @@ func (m model) currentSendTarget() (agentRow, bool) {
 	case simpleView, advancedView:
 		row := m.currentRow()
 		return row, rowTarget(row) != ""
-	case swarmView:
-		swarm, ok := m.selectedSwarmRow()
-		if !ok || !swarmCanSendToMain(swarm) {
-			return agentRow{}, false
-		}
-		return swarm.Main, true
 	default:
 		return agentRow{}, false
 	}

@@ -47,7 +47,7 @@ func (m model) handleClearPaneCaptureStatus() (model, tea.Cmd) {
 
 func (m model) handleRefreshTick() (model, tea.Cmd) {
 	m.agentListLoading = true
-	return m, tea.Batch(loadHealth(m.local), loadAgents(m.local), loadOutboxCmd(), loadSwarms(m.local), loadUnreadCounts(m.local, m.ownName), tickRefresh(), tickAgentListSpinner())
+	return m, tea.Batch(loadHealth(m.local), loadAgents(m.local), loadOutboxCmd(), loadUnreadCounts(m.local, m.ownName), tickRefresh(), tickAgentListSpinner())
 }
 
 func (m model) handleCursorBlinkTick() (model, tea.Cmd) {

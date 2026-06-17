@@ -33,7 +33,7 @@ func (m model) handleKeyMsg(msg tea.KeyMsg) (model, tea.Cmd) {
 		r := msg.Runes[0]
 		var targetMode viewMode
 		found := false
-		if r >= '1' && r <= '7' {
+		if r >= '1' && r <= '6' {
 			idx := int(r - '1')
 			tabs := appTabs()
 			if idx < len(tabs) {
@@ -47,9 +47,6 @@ func (m model) handleKeyMsg(msg tea.KeyMsg) (model, tea.Cmd) {
 				found = true
 			case 'c', 'C':
 				targetMode = simpleView
-				found = true
-			case 'w', 'W':
-				targetMode = swarmView
 				found = true
 			case 's', 'S':
 				targetMode = savedView
@@ -338,10 +335,6 @@ func (m model) handleKeyMsg(msg tea.KeyMsg) (model, tea.Cmd) {
 		return m, m.toggleSaveSelectedMessage()
 	case tea.KeyCtrlP:
 		debugLogf("KeyCtrlP matched: mode=%v rows_len=%d", m.mode, len(m.rows))
-		if m.mode == swarmView {
-			m.selectSwarm(-1)
-			return m, loadSelectedSwarmTimeline(m.local, m.selectedSwarmName())
-		}
 		if m.mode == savedView {
 			m.selectSavedRow(-1)
 			m.selectLatestMessage()
@@ -358,10 +351,6 @@ func (m model) handleKeyMsg(msg tea.KeyMsg) (model, tea.Cmd) {
 		}
 	case tea.KeyCtrlN:
 		debugLogf("KeyCtrlN matched: mode=%v rows_len=%d", m.mode, len(m.rows))
-		if m.mode == swarmView {
-			m.selectSwarm(1)
-			return m, loadSelectedSwarmTimeline(m.local, m.selectedSwarmName())
-		}
 		if m.mode == savedView {
 			m.selectSavedRow(1)
 			m.selectLatestMessage()
@@ -768,21 +757,8 @@ func (m model) handleComposerSubmit() (model, tea.Cmd) {
 			m.composer = nil
 			return m, approvalReviewCmd(approvalMessageForReview(approvalID, selected), action.Result)
 		}
-		if action.Kind == "swarm_create" {
-			if err := m.validateSwarmCreateAction(action); err != nil {
-				m.err = err
-				return m, nil
-			}
-			m.composer = nil
-			m.directInputStatus = "Creating swarm " + action.SwarmName + " from live agents..."
-			m.directInputStatusErr = false
-			return m, assignSwarmCmd(m.local, action.SwarmName, action.MainAgent, action.Subagents)
-		}
 		row, ok := m.currentSendTarget()
 		if !ok || m.agentListStale {
-			if m.mode == swarmView {
-				m.err = fmt.Errorf("swarm message unavailable; use /swarm create or select a swarm with a running main agent")
-			}
 			return m, nil
 		}
 		if action.Kind == "restart" {
@@ -805,9 +781,7 @@ func (m model) handleComposerSubmit() (model, tea.Cmd) {
 			return m, nil
 		}
 		record := makeOutboxRecord(m.ownName, row, action.Body)
-		if m.mode == swarmView {
-			record.SwarmContext = m.selectedSwarmName()
-		}
+
 		m.composer = nil
 		unhideCmd := m.unhideAgent(row)
 		m.clearUnread(row)

@@ -115,3 +115,7 @@ func equalStrings(a, b []string) bool {
 	}
 	return true
 }
+
+func boolPtrFalse(b *bool) bool {
+	return b != nil && !*b
+}

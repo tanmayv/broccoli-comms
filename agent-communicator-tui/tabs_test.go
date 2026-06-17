@@ -10,15 +10,15 @@ import (
 )
 
 func TestTabBarRendersActiveMode(t *testing.T) {
-	m := model{width: 160, mode: swarmView, health: tracker.TrackerInfo{Build: tracker.BuildInfo{Display: "0.1.4"}}}
+	m := model{width: 160, mode: savedView, health: tracker.TrackerInfo{Build: tracker.BuildInfo{Display: "0.1.5"}}}
 	oldVersion := version
-	version = "0.1.4"
+	version = "0.1.5"
 	defer func() { version = oldVersion }()
 	bar := m.bottomTabBar(m.width)
-	if !strings.Contains(bar, "ui 0.1.4") || !strings.Contains(bar, "tracker 0.1.4") {
+	if !strings.Contains(bar, "ui 0.1.5") || !strings.Contains(bar, "tracker 0.1.5") {
 		t.Fatalf("tab bar missing version diagnostics: %q", bar)
 	}
-	for _, want := range []string{"Home", "Simple Chat", "Swarm Mode", "Saved Messages", "Memory Management", "Tasks", "Changelog"} {
+	for _, want := range []string{"Home", "Simple Chat", "Saved Messages", "Memory Management", "Tasks", "Changelog"} {
 		if !strings.Contains(bar, want) {
 			t.Fatalf("tab bar missing %q: %q", want, bar)
 		}
@@ -26,9 +26,9 @@ func TestTabBarRendersActiveMode(t *testing.T) {
 	if strings.Contains(bar, "Advanced Chat") {
 		t.Fatalf("tab bar should not render Advanced Chat: %q", bar)
 	}
-	swarmBar := bar
+	savedBar := bar
 	m.mode = simpleView
-	if simpleBar := m.bottomTabBar(m.width); simpleBar == swarmBar {
+	if simpleBar := m.bottomTabBar(m.width); simpleBar == savedBar {
 		t.Fatalf("active tab styling did not change between modes: %q", simpleBar)
 	}
 }
@@ -42,33 +42,28 @@ func TestAppTabSwitchingWithCtrlTAndCtrlY(t *testing.T) {
 	}
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
 	m = updated.(model)
-	if m.mode != swarmView {
-		t.Fatalf("ctrl-t from simple mode = %v, want swarm", m.mode)
-	}
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
-	m = updated.(model)
 	if m.mode != savedView {
-		t.Fatalf("second ctrl-t mode = %v, want saved", m.mode)
+		t.Fatalf("ctrl-t from simple mode = %v, want saved", m.mode)
 	}
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
 	m = updated.(model)
 	if m.mode != memoryView {
-		t.Fatalf("third ctrl-t mode = %v, want memory", m.mode)
+		t.Fatalf("second ctrl-t mode = %v, want memory", m.mode)
 	}
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
 	m = updated.(model)
 	if m.mode != tasksView {
-		t.Fatalf("fourth ctrl-t mode = %v, want tasks", m.mode)
+		t.Fatalf("third ctrl-t mode = %v, want tasks", m.mode)
 	}
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
 	m = updated.(model)
 	if m.mode != changelogView {
-		t.Fatalf("fifth ctrl-t mode = %v, want changelog", m.mode)
+		t.Fatalf("fourth ctrl-t mode = %v, want changelog", m.mode)
 	}
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
 	m = updated.(model)
 	if m.mode != homeView {
-		t.Fatalf("sixth ctrl-t mode = %v, want home", m.mode)
+		t.Fatalf("fifth ctrl-t mode = %v, want home", m.mode)
 	}
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlY})
 	m = updated.(model)
@@ -77,14 +72,7 @@ func TestAppTabSwitchingWithCtrlTAndCtrlY(t *testing.T) {
 	}
 }
 
-func TestCtrlTRemainsBackwardCompatible(t *testing.T) {
-	m := model{local: &fakeLocal{}}
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
-	m = updated.(model)
-	if m.mode != swarmView {
-		t.Fatalf("ctrl-t mode = %v, want swarm", m.mode)
-	}
-}
+
 
 func TestMouseClickTabSwitchesMode(t *testing.T) {
 	m := model{width: 120, height: 24, local: &fakeLocal{}}
@@ -108,13 +96,13 @@ func TestAppTabSwitchReloadsExpectedMessages(t *testing.T) {
 	m := model{ownName: "agent-communicator", rows: []agentRow{{Name: "alpha", Scope: "local"}}, local: local}
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
 	m = updated.(model)
-	if m.mode != swarmView || cmd == nil {
-		t.Fatalf("swarm tab mode=%v cmd=%v", m.mode, cmd)
+	if m.mode != savedView || cmd != nil {
+		t.Fatalf("saved tab mode=%v cmd=%v, want nil reload", m.mode, cmd)
 	}
 	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
 	m = updated.(model)
-	if m.mode != savedView || cmd != nil {
-		t.Fatalf("saved tab mode=%v cmd=%v, want nil reload", m.mode, cmd)
+	if m.mode != memoryView || cmd == nil {
+		t.Fatalf("memory tab mode=%v cmd=%v", m.mode, cmd)
 	}
 }
 
