@@ -27,6 +27,7 @@
     tmux
     git
     curl
+    jq
 
     # The Pi coding agent binary from pi.nix flake
     inputs.pi-nix.packages.${pkgs.system}.default
