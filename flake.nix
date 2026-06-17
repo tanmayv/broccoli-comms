@@ -219,5 +219,12 @@
         broccoli-comms = import ./modules/nixos.nix self;
         default = self.nixosModules.broccoli-comms;
       };
+
+      templates = {
+        codex = {
+          path = ./template/codex;
+          description = "Home Manager configuration with Codex CLI enabled";
+        };
+      };
     };
 }

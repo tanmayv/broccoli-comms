@@ -1,0 +1,91 @@
+{
+  "nodes": {
+    "broccoli-comms": {
+      "inputs": {
+        "home-manager": "home-manager",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1781670185,
+        "narHash": "sha256-PzWGz1K+6tXCmO1tHfN/BRWaA7foanKrdBcu/DudIJI=",
+        "owner": "tanmayv",
+        "repo": "broccoli-comms",
+        "rev": "6341c5e4a6872c423feeab27d5d1bd73a2d0fd2e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tanmayv",
+        "repo": "broccoli-comms",
+        "type": "github"
+      }
+    },
+    "home-manager": {
+      "inputs": {
+        "nixpkgs": [
+          "broccoli-comms",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1780408569,
+        "narHash": "sha256-s7Tv6FUQThRAvW8En8XVC6HMb0uiikzVccCcCo9u/Bg=",
+        "owner": "nix-community",
+        "repo": "home-manager",
+        "rev": "f384af1bec6423a0d4ba1855917ab948f64e5808",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "home-manager",
+        "type": "github"
+      }
+    },
+    "home-manager_2": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1781667738,
+        "narHash": "sha256-OxrwHpsWf+QGbos1LMDGAcv7sjBGshcw/43th6waeYI=",
+        "owner": "nix-community",
+        "repo": "home-manager",
+        "rev": "7664e05e2413d5e2b8c54a884eb8ea0f8a504fc2",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "home-manager",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1781577229,
+        "narHash": "sha256-lrp67w8AulE9Ks53n27I45ADSzbOCn4H+CNW1Ck8B+8=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "567a49d1913ce81ac6e9582e3553dd90a955875f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "broccoli-comms": "broccoli-comms",
+        "home-manager": "home-manager_2",
+        "nixpkgs": "nixpkgs"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
