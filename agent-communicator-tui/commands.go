@@ -45,6 +45,7 @@ type localClient interface {
 	MemoryRollback(ctx context.Context, memoryID string, targetVersion, expectedVersion int, actor string) (tracker.MemoryResult, error)
 	MemoryRevoke(ctx context.Context, memoryID string, reason string, expectedVersion int, actor string) (tracker.MemoryResult, error)
 	RequestStop(ctx context.Context, target string, timeout string, force bool) (bool, error)
+	RestartAgent(ctx context.Context, target string) (bool, error)
 }
 
 type messageIDSender interface {
@@ -512,7 +513,7 @@ func restartAgentCmd(local localClient, target string, timeout string) tea.Cmd {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		_, err := local.RequestStop(ctx, target, timeout, false)
+		_, err := local.RestartAgent(ctx, target)
 		return restartRequested{Target: target, Timeout: timeout, Err: err}
 	}
 }

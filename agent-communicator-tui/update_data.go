@@ -86,7 +86,7 @@ func (m model) handleRestartRequested(msg restartRequested) (model, tea.Cmd) {
 		m.directInputStatus = "Restart request failed: " + msg.Err.Error()
 		m.directInputStatusErr = true
 	} else {
-		m.directInputStatus = "Graceful restart triggered for " + msg.Target + " (timeout " + msg.Timeout + ")"
+		m.directInputStatus = "Restart triggered for " + msg.Target
 		m.directInputStatusErr = false
 	}
 	return m, tea.Tick(4*time.Second, func(time.Time) tea.Msg { return clearDirectInputStatusTick{} })

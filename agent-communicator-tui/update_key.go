@@ -763,7 +763,7 @@ func (m model) handleComposerSubmit() (model, tea.Cmd) {
 		}
 		if action.Kind == "restart" {
 			m.composer = nil
-			m.directInputStatus = fmt.Sprintf("Triggering graceful restart for %s (timeout %s)...", row.Name, action.Timeout)
+			m.directInputStatus = fmt.Sprintf("Triggering restart for %s...", row.Name)
 			m.directInputStatusErr = false
 			return m, restartAgentCmd(m.local, rowTarget(row), action.Timeout)
 		}

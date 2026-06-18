@@ -561,3 +561,12 @@ func (c *Client) RequestStop(ctx context.Context, target string, timeout string,
 	err := c.call(ctx, "request_stop", params, 10*time.Second, &result)
 	return result, err
 }
+
+func (c *Client) RestartAgent(ctx context.Context, target string) (bool, error) {
+	params := map[string]any{
+		"target_address": target,
+	}
+	var result bool
+	err := c.call(ctx, "restart_agent", params, 10*time.Second, &result)
+	return result, err
+}

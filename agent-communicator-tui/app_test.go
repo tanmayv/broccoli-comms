@@ -32,6 +32,7 @@ type fakeLocal struct {
 	restartTimeout        string
 	restartForce          bool
 	restartErr            error
+	restartAgentTarget    string
 	directText            string
 	directSubmit          bool
 	directKeys            []string
@@ -60,6 +61,10 @@ func (f *fakeLocal) RequestStop(_ context.Context, target string, timeout string
 	f.restartTarget = target
 	f.restartTimeout = timeout
 	f.restartForce = force
+	return f.restartErr == nil, f.restartErr
+}
+func (f *fakeLocal) RestartAgent(_ context.Context, target string) (bool, error) {
+	f.restartAgentTarget = target
 	return f.restartErr == nil, f.restartErr
 }
 func (f *fakeLocal) TrackerInfo(context.Context) (tracker.TrackerInfo, error) {
@@ -332,7 +337,7 @@ func TestComposerRestartCommand(t *testing.T) {
 	if string(m.composer) != "" {
 		t.Fatalf("expected composer to be cleared, got %q", string(m.composer))
 	}
-	if !strings.Contains(m.directInputStatus, "Triggering graceful restart for alpha (timeout 20s)") {
+	if !strings.Contains(m.directInputStatus, "Triggering restart for alpha") {
 		t.Fatalf("unexpected status: %q", m.directInputStatus)
 	}
 	if cmd == nil {
@@ -346,8 +351,8 @@ func TestComposerRestartCommand(t *testing.T) {
 	if req.Err != nil {
 		t.Fatalf("restart failed: %v", req.Err)
 	}
-	if local.restartTarget != "alpha" || local.restartTimeout != "20s" || local.restartForce != false {
-		t.Fatalf("unexpected mock calls: target=%q timeout=%q force=%t", local.restartTarget, local.restartTimeout, local.restartForce)
+	if local.restartAgentTarget != "alpha" || local.restartTarget != "" {
+		t.Fatalf("unexpected mock calls: restartAgentTarget=%q stopTarget=%q", local.restartAgentTarget, local.restartTarget)
 	}
 
 	// 2. Test /restart with custom timeout (15s)
@@ -369,14 +374,14 @@ func TestComposerRestartCommand(t *testing.T) {
 	if !ok || req.Err != nil {
 		t.Fatalf("restart failed or wrong msg: %#v", msg)
 	}
-	if local.restartTarget != "alpha" || local.restartTimeout != "15s" || local.restartForce != false {
-		t.Fatalf("unexpected mock calls: target=%q timeout=%q force=%t", local.restartTarget, local.restartTimeout, local.restartForce)
+	if local.restartAgentTarget != "alpha" || local.restartTarget != "" {
+		t.Fatalf("unexpected mock calls: restartAgentTarget=%q stopTarget=%q", local.restartAgentTarget, local.restartTarget)
 	}
 
 	// 3. Test handleRestartRequested updates model status
 	updated, cmd = m.Update(req)
 	m = updated.(model)
-	if m.directInputStatus != "Graceful restart triggered for alpha (timeout 15s)" || m.directInputStatusErr {
+	if m.directInputStatus != "Restart triggered for alpha" || m.directInputStatusErr {
 		t.Fatalf("unexpected status after update: %q (err=%t)", m.directInputStatus, m.directInputStatusErr)
 	}
 }

@@ -420,3 +420,20 @@ func TestRequestStopCallsRPC(t *testing.T) {
 		t.Fatalf("RequestStop: success=%t, err=%v", success, err)
 	}
 }
+
+func TestRestartAgentCallsRPC(t *testing.T) {
+	client := fakeClient(t, func(req rpcRequest) any {
+		if req.Method != "restart_agent" {
+			t.Fatalf("method = %s, want restart_agent", req.Method)
+		}
+		params := req.Params.(map[string]any)
+		if params["target_address"] != "alpha" {
+			t.Fatalf("params = %+v", params)
+		}
+		return true
+	})
+	success, err := client.RestartAgent(context.Background(), "alpha")
+	if err != nil || !success {
+		t.Fatalf("RestartAgent: success=%t, err=%v", success, err)
+	}
+}
