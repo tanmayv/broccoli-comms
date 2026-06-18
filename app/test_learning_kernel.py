@@ -950,6 +950,21 @@ class TestLearningKernelCli(unittest.TestCase):
             self.assertEqual([m["memory_id"] for m in boot["records"]], [first["memory"]["memory_id"]])
             self.assertEqual(boot["records"][0]["body"], "Use /latest")
 
+    def test_memory_edit_and_rollback_preserve_effective_agent_for_bootstrap(self):
+        with tempfile.TemporaryDirectory() as tmp, self.env(tmp):
+            k = broccoli.learning_kernel()
+            proposed = k.memory_propose(type="fact", scope="global", title="Agent fact", body="v1", proposed_by="a")
+            approved = k.memory_approve(proposed["memory"]["memory_id"], proposed["memory"]["version"], actor="user")
+            self.assertEqual(k.memory_for_bootstrap(agent="a")["records"][0]["memory_id"], approved["memory"]["memory_id"])
+
+            edited = k.memory_edit(approved["memory"]["memory_id"], body="v2", expected_version=approved["memory"]["version"], actor="user")
+            self.assertEqual(edited["memory"].get("subject_agent"), "a")
+            self.assertEqual(k.memory_for_bootstrap(agent="a")["records"][0]["body"], "v2")
+
+            rolled_back = k.memory_rollback(approved["memory"]["memory_id"], target_version=approved["memory"]["version"], expected_version=edited["memory"]["version"], actor="user")
+            self.assertEqual(rolled_back["memory"].get("subject_agent"), "a")
+            self.assertEqual(k.memory_for_bootstrap(agent="a")["records"][0]["body"], "v1")
+
     def test_memory_unvalidated_immutable_stale_and_hidden_statuses(self):
         with tempfile.TemporaryDirectory() as tmp, self.env(tmp):
             k = broccoli.learning_kernel()

@@ -1425,6 +1425,8 @@ class LearningKernel:
             for key in ("type", "scope", "subject_agent", "title", "body", "source_task_id", "tags", "metadata"):
                 if key in kw and kw[key] is not None:
                     merged[key] = kw[key]
+            if not merged.get("subject_agent"):
+                merged["subject_agent"] = target.get("proposed_by")
                     
             metadata = dict(merged.get("metadata") or {})
             metadata.update({"target_expected_version": int(target["version"])})
