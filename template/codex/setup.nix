@@ -41,16 +41,6 @@ in
     enable-codex-agent = false;
     enable-gemini-agent = false;
 
-    # Registry configuration for tracker
-    agent-tracker = {
-      registry-url = null;
-      registry-auth = false;
-      registries = [
-        { name = "local"; url = "http://127.0.0.1:18000"; }
-        { name = "mundus"; url = "https://agents.mundus.in"; }
-      ];
-    };
-
     # AI/agent feature flags
     ai_features = {
       enable_agent_knowledge = true;
