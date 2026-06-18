@@ -14,8 +14,9 @@
   # The home.packages option allows you to install Nix packages into your
   # environment.
   home.packages = with pkgs; [
-    # The Codex CLI package
+    # Agent CLI packages
     codex
+    claude-code
     
     # Core utilities needed by Broccoli Comms agents
     tmux
