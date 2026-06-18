@@ -830,11 +830,43 @@ func TestRunNewAgentFlowUsesConfiguredProviderAndHost(t *testing.T) {
 	if m.showingRunAgentForm || cmd == nil {
 		t.Fatalf("enter should close form and return run command")
 	}
-	args, err := runNewAgentArgs("coder", "remote-host", "pi")
-	if err != nil {
+	args := runAgentWithOverridesArgs(false, "coder", "remote-host", "", "", "pi", "", "")
+	want := []string{"run", "--host", "remote-host", "--json", "coder", "--", "pi"}
+	if strings.Join(args, "\x00") != strings.Join(want, "\x00") {
+		t.Fatalf("args = %#v, want %#v", args, want)
+	}
+}
+
+func TestRunNewAgentFormSubmitsTypedNameNotMenuLabel(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmp)
+	configDir := filepath.Join(tmp, "broccoli-comms")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"run", "--host", "remote-host", "--json", "coder", "--", "pi"}
+	if err := os.WriteFile(filepath.Join(configDir, "config.toml"), []byte("[providers.pi]\ncmd = 'pi'\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	config.ResetForTest()
+	defer config.ResetForTest()
+
+	m := model{configItems: []ConfigSelectionItem{{Name: "Run new agent on remote-host", IsNewAgent: true, IsRemote: true, Hostname: "remote-host", Launchable: true}}, local: &fakeLocal{}}
+	m.openRunAgentForm(m.configItems[0])
+	if m.runAgentProfileName != "Run new agent on remote-host" {
+		t.Fatalf("test setup changed: profileName=%q", m.runAgentProfileName)
+	}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("valid-agent")})
+	m = updated.(model)
+	name := strings.TrimSpace(string(m.runAgentName))
+	if m.runAgentIsExisting {
+		t.Fatal("test must use new-agent form")
+	}
+	profileName := m.runAgentProfileName
+	if !m.runAgentIsExisting {
+		profileName = name
+	}
+	args := runAgentWithOverridesArgs(m.runAgentIsExisting, profileName, m.runAgentHost, "", m.runAgentDefaultCWD, m.runAgentProvider, m.runAgentDefaultProv, "")
+	want := []string{"run", "--host", "remote-host", "--json", "valid-agent", "--", "pi"}
 	if strings.Join(args, "\x00") != strings.Join(want, "\x00") {
 		t.Fatalf("args = %#v, want %#v", args, want)
 	}

@@ -680,6 +680,10 @@ func (m model) handleRunAgentFormKey(msg tea.KeyMsg) (model, tea.Cmd) {
 			m.err = fmt.Errorf("agent name is required")
 			return m, nil
 		}
+		profileName := m.runAgentProfileName
+		if !m.runAgentIsExisting {
+			profileName = name
+		}
 		m.showingRunAgentForm = false
 		m.runAgentName = nil
 		optionalArgs := strings.TrimSpace(string(m.runAgentArgs))
@@ -688,7 +692,7 @@ func (m model) handleRunAgentFormKey(msg tea.KeyMsg) (model, tea.Cmd) {
 		m.runAgentCWD = nil
 		return m, runAgentWithOverridesCmd(
 			m.runAgentIsExisting,
-			m.runAgentProfileName,
+			profileName,
 			m.runAgentHost,
 			cwdOverride,
 			m.runAgentDefaultCWD,
