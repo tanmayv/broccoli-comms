@@ -23,6 +23,14 @@
     curl
     jq
 
+    # System/runtime dependencies used by Broccoli Comms helpers and scripts
+    python3
+    bash
+    coreutils
+    gnugrep
+    gnused
+    procps
+
     # The Pi coding agent binary from pi.nix flake
     inputs.pi-nix.packages.${pkgs.system}.default
   ];
