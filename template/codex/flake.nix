@@ -21,7 +21,10 @@
     let
       setup = import ./setup.nix;
       system = setup.system;
-      pkgs = nixpkgs.legacyPackages.${system};
+      pkgs = import nixpkgs {
+        inherit system;
+        config.allowUnfree = true;
+      };
     in {
       homeConfigurations.codex = home-manager.lib.homeManagerConfiguration {
         inherit pkgs;
