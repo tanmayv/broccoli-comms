@@ -21,7 +21,11 @@ for arg in "$@"; do
     *) args+=("$arg") ;;
   esac
 done
-set -- "${args[@]}"
+if [[ ${#args[@]} -gt 0 ]]; then
+  set -- "${args[@]}"
+else
+  set --
+fi
 # Keep --obs accepted for parity with the Home Manager wrapper. The standalone
 # wrapper does not open observer panes yet.
 if [[ "$obs_enabled" == "true" ]]; then
@@ -301,8 +305,15 @@ while true; do
   restart_pending=false
   run_status=0
   
-  # Run process in background so traps can interrupt 'wait' immediately
-  "$cmd" "$@" &
+  # Run process in background so traps can interrupt 'wait' immediately.
+  # Bash runs asynchronous commands from non-interactive scripts with stdin
+  # attached to /dev/null when job control is disabled. Interactive agents
+  # such as `pi` need the tmux pane TTY, so explicitly attach /dev/tty.
+  if tty -s; then
+    "$cmd" "$@" </dev/tty &
+  else
+    "$cmd" "$@" &
+  fi
   child_pid=$!
   
   set +e
