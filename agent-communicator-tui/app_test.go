@@ -606,6 +606,17 @@ func TestMessageSentClearsStaleErrorAndReloadsInbox(t *testing.T) {
 	}
 }
 
+func TestWaitEventsCommandReturnsLoadedEvents(t *testing.T) {
+	cmd := waitEvents(&fakeLocal{events: tracker.WaitEventsResult{LastSeq: 7}}, 3)
+	if cmd == nil {
+		t.Fatal("waitEvents should return a command")
+	}
+	msg, ok := cmd().(eventsLoaded)
+	if !ok || msg.Err != nil || msg.Result.LastSeq != 7 {
+		t.Fatalf("waitEvents message = %#v", msg)
+	}
+}
+
 func TestEventsLoadedUpdatesSeqAndReloadsInbox(t *testing.T) {
 	m := model{rows: []agentRow{{Name: "alpha", Scope: "local"}}, local: &fakeLocal{}}
 	updated, cmd := m.Update(eventsLoaded{Result: tracker.WaitEventsResult{LastSeq: 4, Events: []tracker.Event{{Seq: 4, Type: "message_delivered", TargetAgentName: "alpha"}}}})
@@ -660,8 +671,12 @@ func TestEventsLoadedErrorSchedulesDelayedRetry(t *testing.T) {
 func TestRetryEventsStartsWaitEvents(t *testing.T) {
 	m := model{eventSeq: 3, local: &fakeLocal{events: tracker.WaitEventsResult{LastSeq: 4}}}
 	_, cmd := m.Update(retryEvents{})
-	if cmd != nil {
-		t.Fatal("retryEvents should not start waitEvents (disabled)")
+	if cmd == nil {
+		t.Fatal("retryEvents should restart waitEvents")
+	}
+	msg, ok := cmd().(eventsLoaded)
+	if !ok || msg.Result.LastSeq != 4 {
+		t.Fatalf("retryEvents message = %#v", msg)
 	}
 }
 
